@@ -1,0 +1,801 @@
+import React, { useState, useEffect } from 'react';
+import { DollarSign, Users, TrendingUp, LogOut, Home, Briefcase, Link2, CreditCard, User, History, CheckCircle, XCircle, Clock } from 'lucide-react';
+
+const InvestingPro = () => {
+  const [currentPage, setCurrentPage] = useState('login');
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [users, setUsers] = useState([]);
+  const [withdrawals, setWithdrawals] = useState([]);
+  const [transactions, setTransactions] = useState([]);
+
+  useEffect(() => {
+    initializeStorage();
+  }, []);
+
+  const initializeStorage = async () => {
+    try {
+      const usersData = await window.storage.get('investingpro_users');
+      if (!usersData) {
+        const defaultUsers = [{
+          id: '1',
+          email: 'admin@investingpro.com',
+          username: 'admin',
+          password: 'admin123',
+          isAdmin: true
+        }];
+        await window.storage.set('investingpro_users', JSON.stringify(defaultUsers));
+        setUsers(defaultUsers);
+      } else {
+        setUsers(JSON.parse(usersData.value));
+      }
+
+      const withdrawalsData = await window.storage.get('investingpro_withdrawals');
+      if (!withdrawalsData) {
+        await window.storage.set('investingpro_withdrawals', JSON.stringify([]));
+      } else {
+        setWithdrawals(JSON.parse(withdrawalsData.value));
+      }
+
+      const transactionsData = await window.storage.get('investingpro_transactions');
+      if (!transactionsData) {
+        await window.storage.set('investingpro_transactions', JSON.stringify([]));
+      } else {
+        setTransactions(JSON.parse(transactionsData.value));
+      }
+    } catch (error) {
+      console.error('Storage initialization error:', error);
+    }
+  };
+
+  const saveUsers = async (updatedUsers) => {
+    await window.storage.set('investingpro_users', JSON.stringify(updatedUsers));
+    setUsers(updatedUsers);
+  };
+
+  const saveWithdrawals = async (updatedWithdrawals) => {
+    await window.storage.set('investingpro_withdrawals', JSON.stringify(updatedWithdrawals));
+    setWithdrawals(updatedWithdrawals);
+  };
+
+  const saveTransactions = async (updatedTransactions) => {
+    await window.storage.set('investingpro_transactions', JSON.stringify(updatedTransactions));
+    setTransactions(updatedTransactions);
+  };
+
+  const handleLogin = async (email, password) => {
+    const user = users.find(u => u.email === email && u.password === password);
+    if (user) {
+      setCurrentUser(user);
+      setIsAdmin(user.isAdmin || false);
+      setCurrentPage(user.isAdmin ? 'admin-dashboard' : 'dashboard');
+      return true;
+    }
+    return false;
+  };
+
+  const handleSignup = async (email, username, password, referralCode) => {
+    if (users.find(u => u.email === email)) {
+      return { success: false, message: 'Email already exists' };
+    }
+
+    const newUser = {
+      id: Date.now().toString(),
+      email,
+      username,
+      password,
+      balance: 0,
+      totalInvested: 0,
+      profit: 0,
+      referralCode: 'INV' + Math.random().toString(36).substr(2, 8).toUpperCase(),
+      referredBy: referralCode,
+      referrals: [],
+      isAdmin: false,
+      createdAt: new Date().toISOString()
+    };
+
+    const updatedUsers = [...users, newUser];
+
+    if (referralCode) {
+      const referrer = updatedUsers.find(u => u.referralCode === referralCode);
+      if (referrer) {
+        if (!referrer.referrals) referrer.referrals = [];
+        referrer.referrals.push({
+          userId: newUser.id,
+          username: newUser.username,
+          date: new Date().toISOString()
+        });
+      }
+    }
+
+    await saveUsers(updatedUsers);
+    return { success: true, message: 'Account created successfully!' };
+  };
+
+  const handleInvestment = async (amount) => {
+    if (!currentUser || amount <= 0) return false;
+
+    const updatedUsers = users.map(u => {
+      if (u.id === currentUser.id) {
+        const updated = {
+          ...u,
+          totalInvested: (u.totalInvested || 0) + amount,
+          balance: (u.balance || 0) + amount
+        };
+        setCurrentUser(updated);
+        return updated;
+      }
+      return u;
+    });
+
+    if (currentUser.referredBy) {
+      const referrer = updatedUsers.find(u => u.referralCode === currentUser.referredBy);
+      if (referrer) {
+        const commission = amount * 0.1;
+        referrer.balance = (referrer.balance || 0) + commission;
+        referrer.profit = (referrer.profit || 0) + commission;
+      }
+    }
+
+    await saveUsers(updatedUsers);
+
+    const newTransaction = {
+      id: Date.now().toString(),
+      userId: currentUser.id,
+      type: 'investment',
+      amount,
+      date: new Date().toISOString(),
+      status: 'completed'
+    };
+    await saveTransactions([...transactions, newTransaction]);
+    return true;
+  };
+
+  const handleWithdrawalRequest = async (amount, accountNumber, bankName) => {
+    if (!currentUser || amount <= 0 || amount > currentUser.balance) return false;
+
+    const newWithdrawal = {
+      id: Date.now().toString(),
+      userId: currentUser.id,
+      username: currentUser.username,
+      amount,
+      accountNumber,
+      bankName,
+      status: 'pending',
+      requestDate: new Date().toISOString()
+    };
+
+    await saveWithdrawals([...withdrawals, newWithdrawal]);
+
+    const newTransaction = {
+      id: Date.now().toString(),
+      userId: currentUser.id,
+      type: 'withdrawal',
+      amount,
+      date: new Date().toISOString(),
+      status: 'pending'
+    };
+    await saveTransactions([...transactions, newTransaction]);
+    return true;
+  };
+
+  const handleWithdrawalUpdate = async (withdrawalId, newStatus) => {
+    const updatedWithdrawals = withdrawals.map(w => 
+      w.id === withdrawalId ? { ...w, status: newStatus, processedDate: new Date().toISOString() } : w
+    );
+
+    await saveWithdrawals(updatedWithdrawals);
+
+    if (newStatus === 'approved') {
+      const withdrawal = withdrawals.find(w => w.id === withdrawalId);
+      const updatedUsers = users.map(u => 
+        u.id === withdrawal.userId ? { ...u, balance: u.balance - withdrawal.amount } : u
+      );
+      await saveUsers(updatedUsers);
+    }
+
+    const updatedTransactions = transactions.map(t => {
+      const targetWithdrawal = withdrawals.find(w => w.id === withdrawalId);
+      return (t.type === 'withdrawal' && targetWithdrawal && t.userId === targetWithdrawal.userId) 
+        ? { ...t, status: newStatus } : t;
+    });
+    await saveTransactions(updatedTransactions);
+  };
+
+  const LoginPage = () => {
+    const [isLogin, setIsLogin] = useState(true);
+    const [formData, setFormData] = useState({ email: '', username: '', password: '', referralCode: '' });
+    const [error, setError] = useState('');
+
+    const handleSubmit = async (e) => {
+      e.preventDefault();
+      setError('');
+
+      if (isLogin) {
+        const success = await handleLogin(formData.email, formData.password);
+        if (!success) setError('Invalid email or password');
+      } else {
+        const result = await handleSignup(formData.email, formData.username, formData.password, formData.referralCode);
+        if (result.success) {
+          setIsLogin(true);
+          setFormData({ email: '', username: '', password: '', referralCode: '' });
+        } else {
+          setError(result.message);
+        }
+      }
+    };
+
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-900 to-blue-700 flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8">
+          <div className="text-center mb-8">
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-green-600 rounded-full mb-4">
+              <TrendingUp className="w-8 h-8 text-white" />
+            </div>
+            <h1 className="text-3xl font-bold text-blue-900">InvestingPro</h1>
+            <p className="text-gray-600 mt-2">Your Trusted Investment Platform</p>
+          </div>
+
+          <div className="flex mb-6">
+            <button onClick={() => setIsLogin(true)} className={`flex-1 py-2 ${isLogin ? 'bg-blue-900 text-white' : 'bg-gray-100 text-gray-600'} rounded-l-lg transition`}>
+              Login
+            </button>
+            <button onClick={() => setIsLogin(false)} className={`flex-1 py-2 ${!isLogin ? 'bg-blue-900 text-white' : 'bg-gray-100 text-gray-600'} rounded-r-lg transition`}>
+              Sign Up
+            </button>
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+              <input type="email" required value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-600 focus:border-transparent" />
+            </div>
+
+            {!isLogin && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Username</label>
+                <input type="text" required value={formData.username} onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-600 focus:border-transparent" />
+              </div>
+            )}
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+              <input type="password" required value={formData.password} onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-600 focus:border-transparent" />
+            </div>
+
+            {!isLogin && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Referral Code (Optional)</label>
+                <input type="text" value={formData.referralCode} onChange={(e) => setFormData({ ...formData, referralCode: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-600 focus:border-transparent" />
+              </div>
+            )}
+
+            {error && <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm">{error}</div>}
+
+            <button type="submit" className="w-full bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 transition">
+              {isLogin ? 'Login' : 'Create Account'}
+            </button>
+          </form>
+
+          {isLogin && <p className="text-center text-sm text-gray-600 mt-4">Demo Admin: admin@investingpro.com / admin123</p>}
+        </div>
+      </div>
+    );
+  };
+
+  const UserDashboard = () => (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="bg-white rounded-xl shadow-lg p-6">
+        <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mb-4">
+          <DollarSign className="w-6 h-6 text-blue-600" />
+        </div>
+        <h3 className="text-gray-600 text-sm mb-1">Total Invested</h3>
+        <p className="text-2xl font-bold text-blue-900">${(currentUser?.totalInvested || 0).toFixed(2)}</p>
+      </div>
+      <div className="bg-white rounded-xl shadow-lg p-6">
+        <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mb-4">
+          <TrendingUp className="w-6 h-6 text-green-600" />
+        </div>
+        <h3 className="text-gray-600 text-sm mb-1">Current Balance</h3>
+        <p className="text-2xl font-bold text-green-600">${(currentUser?.balance || 0).toFixed(2)}</p>
+      </div>
+      <div className="bg-white rounded-xl shadow-lg p-6">
+        <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mb-4">
+          <Users className="w-6 h-6 text-purple-600" />
+        </div>
+        <h3 className="text-gray-600 text-sm mb-1">Total Referrals</h3>
+        <p className="text-2xl font-bold text-blue-900">{currentUser?.referrals?.length || 0}</p>
+      </div>
+      <div className="bg-white rounded-xl shadow-lg p-6">
+        <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center mb-4">
+          <TrendingUp className="w-6 h-6 text-orange-600" />
+        </div>
+        <h3 className="text-gray-600 text-sm mb-1">Total Profit</h3>
+        <p className="text-2xl font-bold text-green-600">${(currentUser?.profit || 0).toFixed(2)}</p>
+      </div>
+    </div>
+  );
+
+  const InvestmentPage = () => {
+    const [amount, setAmount] = useState('');
+    const [success, setSuccess] = useState(false);
+
+    const plans = [
+      { name: 'Starter', minAmount: 100, maxAmount: 999, returns: '5%', duration: '7 days' },
+      { name: 'Growth', minAmount: 1000, maxAmount: 4999, returns: '8%', duration: '14 days' },
+      { name: 'Premium', minAmount: 5000, maxAmount: 19999, returns: '12%', duration: '30 days' },
+      { name: 'Elite', minAmount: 20000, maxAmount: 999999, returns: '15%', duration: '60 days' }
+    ];
+
+    const handleInvest = async () => {
+      const investAmount = parseFloat(amount);
+      if (investAmount > 0) {
+        const result = await handleInvestment(investAmount);
+        if (result) {
+          setSuccess(true);
+          setAmount('');
+          setTimeout(() => setSuccess(false), 3000);
+        }
+      }
+    };
+
+    return (
+      <div className="space-y-6">
+        <h2 className="text-2xl font-bold text-blue-900">Investment Plans</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {plans.map((plan, idx) => (
+            <div key={idx} className="bg-white rounded-xl shadow-lg p-6 border-2 border-transparent hover:border-green-600 transition">
+              <h3 className="text-xl font-bold text-blue-900 mb-2">{plan.name}</h3>
+              <div className="space-y-2 text-sm text-gray-600">
+                <p>Min: ${plan.minAmount}</p>
+                <p>Max: ${plan.maxAmount}</p>
+                <p className="text-green-600 font-semibold">Returns: {plan.returns}</p>
+                <p>Duration: {plan.duration}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="bg-white rounded-xl shadow-lg p-6">
+          <h3 className="text-xl font-bold text-blue-900 mb-4">Make Investment</h3>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Investment Amount ($)</label>
+              <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Enter amount"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-600 focus:border-transparent" />
+            </div>
+            {success && (
+              <div className="bg-green-50 text-green-600 p-3 rounded-lg flex items-center">
+                <CheckCircle className="w-5 h-5 mr-2" />Profile updated successfully!
+              </div>
+            )}
+            <button type="submit" className="w-full bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 transition">
+              Update Profile
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  };
+
+  const AdminDashboard = () => {
+    const totalUsers = users.filter(u => !u.isAdmin).length;
+    const totalInvestments = users.reduce((sum, u) => sum + (u.totalInvested || 0), 0);
+    const totalReferrals = users.reduce((sum, u) => sum + (u.referrals?.length || 0), 0);
+    const pendingWithdrawals = withdrawals.filter(w => w.status === 'pending').length;
+
+    return (
+      <div className="space-y-6">
+        <h2 className="text-2xl font-bold text-blue-900">Admin Dashboard</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="bg-white rounded-xl shadow-lg p-6">
+            <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mb-4">
+              <Users className="w-6 h-6 text-blue-600" />
+            </div>
+            <h3 className="text-gray-600 text-sm mb-1">Total Users</h3>
+            <p className="text-2xl font-bold text-blue-900">{totalUsers}</p>
+          </div>
+          <div className="bg-white rounded-xl shadow-lg p-6">
+            <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mb-4">
+              <DollarSign className="w-6 h-6 text-green-600" />
+            </div>
+            <h3 className="text-gray-600 text-sm mb-1">Total Investments</h3>
+            <p className="text-2xl font-bold text-green-600">${totalInvestments.toFixed(2)}</p>
+          </div>
+          <div className="bg-white rounded-xl shadow-lg p-6">
+            <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mb-4">
+              <Link2 className="w-6 h-6 text-purple-600" />
+            </div>
+            <h3 className="text-gray-600 text-sm mb-1">Total Referrals</h3>
+            <p className="text-2xl font-bold text-blue-900">{totalReferrals}</p>
+          </div>
+          <div className="bg-white rounded-xl shadow-lg p-6">
+            <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center mb-4">
+              <Clock className="w-6 h-6 text-orange-600" />
+            </div>
+            <h3 className="text-gray-600 text-sm mb-1">Pending Withdrawals</h3>
+            <p className="text-2xl font-bold text-orange-600">{pendingWithdrawals}</p>
+          </div>
+        </div>
+        <div className="bg-white rounded-xl shadow-lg p-6">
+          <h3 className="text-xl font-bold text-blue-900 mb-4">All Users</h3>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b">
+                  <th className="text-left py-3 px-4">Username</th>
+                  <th className="text-left py-3 px-4">Email</th>
+                  <th className="text-left py-3 px-4">Balance</th>
+                  <th className="text-left py-3 px-4">Invested</th>
+                  <th className="text-left py-3 px-4">Referrals</th>
+                </tr>
+              </thead>
+              <tbody>
+                {users.filter(u => !u.isAdmin).map(user => (
+                  <tr key={user.id} className="border-b hover:bg-gray-50">
+                    <td className="py-3 px-4">{user.username}</td>
+                    <td className="py-3 px-4">{user.email}</td>
+                    <td className="py-3 px-4 text-green-600 font-semibold">${(user.balance || 0).toFixed(2)}</td>
+                    <td className="py-3 px-4">${(user.totalInvested || 0).toFixed(2)}</td>
+                    <td className="py-3 px-4">{user.referrals?.length || 0}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const AdminWithdrawals = () => {
+    return (
+      <div className="space-y-6">
+        <h2 className="text-2xl font-bold text-blue-900">Withdrawal Requests</h2>
+        <div className="bg-white rounded-xl shadow-lg p-6">
+          {withdrawals.length > 0 ? (
+            <div className="space-y-4">
+              {withdrawals.map(w => (
+                <div key={w.id} className="p-4 border rounded-lg">
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <p className="font-bold text-blue-900">{w.username}</p>
+                      <p className="text-sm text-gray-600">{new Date(w.requestDate).toLocaleString()}</p>
+                    </div>
+                    <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                      w.status === 'approved' ? 'bg-green-100 text-green-700' :
+                      w.status === 'rejected' ? 'bg-red-100 text-red-700' :
+                      'bg-yellow-100 text-yellow-700'
+                    }`}>{w.status.toUpperCase()}</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4 text-sm mb-3">
+                    <div>
+                      <p className="text-gray-600">Amount</p>
+                      <p className="font-semibold text-green-600">${w.amount.toFixed(2)}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-600">Bank</p>
+                      <p className="font-semibold">{w.bankName}</p>
+                    </div>
+                    <div className="col-span-2">
+                      <p className="text-gray-600">Account Number</p>
+                      <p className="font-semibold">{w.accountNumber}</p>
+                    </div>
+                  </div>
+                  {w.status === 'pending' && (
+                    <div className="flex gap-2">
+                      <button onClick={() => handleWithdrawalUpdate(w.id, 'approved')}
+                        className="flex-1 bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 transition flex items-center justify-center">
+                        <CheckCircle className="w-4 h-4 mr-2" />Approve
+                      </button>
+                      <button onClick={() => handleWithdrawalUpdate(w.id, 'rejected')}
+                        className="flex-1 bg-red-600 text-white py-2 rounded-lg hover:bg-red-700 transition flex items-center justify-center">
+                        <XCircle className="w-4 h-4 mr-2" />Reject
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-gray-600 text-center py-8">No withdrawal requests.</p>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const Navigation = () => {
+    const menuItems = isAdmin ? [
+      { id: 'admin-dashboard', label: 'Dashboard', icon: Home },
+      { id: 'admin-withdrawals', label: 'Withdrawals', icon: CreditCard }
+    ] : [
+      { id: 'dashboard', label: 'Dashboard', icon: Home },
+      { id: 'invest', label: 'Invest', icon: Briefcase },
+      { id: 'referrals', label: 'Referrals', icon: Link2 },
+      { id: 'withdraw', label: 'Withdraw', icon: CreditCard },
+      { id: 'history', label: 'History', icon: History },
+      { id: 'profile', label: 'Profile', icon: User }
+    ];
+
+    return (
+      <nav className="bg-blue-900 text-white">
+        <div className="max-w-7xl mx-auto px-4">
+          <div className="flex items-center justify-between h-16">
+            <div className="flex items-center space-x-2">
+              <TrendingUp className="w-8 h-8 text-green-500" />
+              <span className="text-xl font-bold">InvestingPro</span>
+            </div>
+            <button onClick={() => { setCurrentUser(null); setIsAdmin(false); setCurrentPage('login'); }}
+              className="flex items-center space-x-2 px-4 py-2 bg-red-600 rounded-lg hover:bg-red-700 transition">
+              <LogOut className="w-4 h-4" />
+              <span>Logout</span>
+            </button>
+          </div>
+        </div>
+        <div className="bg-blue-800 overflow-x-auto">
+          <div className="max-w-7xl mx-auto px-4">
+            <div className="flex space-x-1">
+              {menuItems.map(item => (
+                <button key={item.id} onClick={() => setCurrentPage(item.id)}
+                  className={`flex items-center space-x-2 px-4 py-3 transition whitespace-nowrap ${
+                    currentPage === item.id ? 'bg-green-600 text-white' : 'text-gray-300 hover:bg-blue-700'
+                  }`}>
+                  <item.icon className="w-4 h-4" />
+                  <span className="text-sm font-medium">{item.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </nav>
+    );
+  };
+
+  if (currentPage === 'login') {
+    return <LoginPage />;
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-100">
+      <Navigation />
+      <div className="max-w-7xl mx-auto px-4 py-8">
+        {currentPage === 'dashboard' && <UserDashboard />}
+        {currentPage === 'invest' && <InvestmentPage />}
+        {currentPage === 'referrals' && <ReferralPage />}
+        {currentPage === 'withdraw' && <WithdrawalPage />}
+        {currentPage === 'history' && <TransactionHistory />}
+        {currentPage === 'profile' && <ProfilePage />}
+        {currentPage === 'admin-dashboard' && <AdminDashboard />}
+        {currentPage === 'admin-withdrawals' && <AdminWithdrawals />}
+      </div>
+    </div>
+  );
+};
+
+export default InvestingPro;2" />Investment successful!
+              </div>
+            )}
+            <button onClick={handleInvest} className="w-full bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 transition">
+              Invest Now
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const ReferralPage = () => {
+    const [copied, setCopied] = useState(false);
+    const referralLink = `https://investingpro.com/signup?ref=${currentUser?.referralCode}`;
+
+    const copyLink = () => {
+      navigator.clipboard.writeText(referralLink);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    };
+
+    return (
+      <div className="space-y-6">
+        <h2 className="text-2xl font-bold text-blue-900">Referral Program</h2>
+        <div className="bg-gradient-to-r from-green-600 to-green-500 rounded-xl shadow-lg p-6 text-white">
+          <h3 className="text-xl font-bold mb-2">Earn 10% Commission</h3>
+          <p className="mb-4">Share your referral link and earn 10% of every investment made by your referrals!</p>
+          <div className="bg-white rounded-lg p-4 flex items-center justify-between">
+            <span className="text-gray-800 text-sm truncate mr-4">{referralLink}</span>
+            <button onClick={copyLink} className="bg-blue-900 text-white px-4 py-2 rounded-lg hover:bg-blue-800 transition flex-shrink-0">
+              {copied ? 'Copied!' : 'Copy'}
+            </button>
+          </div>
+        </div>
+        <div className="bg-white rounded-xl shadow-lg p-6">
+          <h3 className="text-xl font-bold text-blue-900 mb-4">Your Referrals ({currentUser?.referrals?.length || 0})</h3>
+          {currentUser?.referrals && currentUser.referrals.length > 0 ? (
+            <div className="space-y-3">
+              {currentUser.referrals.map((ref, idx) => (
+                <div key={idx} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                  <div>
+                    <p className="font-semibold text-blue-900">{ref.username}</p>
+                    <p className="text-sm text-gray-600">{new Date(ref.date).toLocaleDateString()}</p>
+                  </div>
+                  <CheckCircle className="w-5 h-5 text-green-600" />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-gray-600 text-center py-8">No referrals yet. Start sharing your link!</p>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const WithdrawalPage = () => {
+    const [formData, setFormData] = useState({ amount: '', accountNumber: '', bankName: '' });
+    const [success, setSuccess] = useState(false);
+    const [error, setError] = useState('');
+
+    const handleSubmit = async (e) => {
+      e.preventDefault();
+      setError('');
+      const amount = parseFloat(formData.amount);
+
+      if (amount > currentUser.balance) {
+        setError('Insufficient balance');
+        return;
+      }
+
+      const result = await handleWithdrawalRequest(amount, formData.accountNumber, formData.bankName);
+      if (result) {
+        setSuccess(true);
+        setFormData({ amount: '', accountNumber: '', bankName: '' });
+        setTimeout(() => setSuccess(false), 3000);
+      }
+    };
+
+    const userWithdrawals = withdrawals.filter(w => w.userId === currentUser?.id);
+
+    return (
+      <div className="space-y-6">
+        <h2 className="text-2xl font-bold text-blue-900">Withdraw Funds</h2>
+        <div className="bg-white rounded-xl shadow-lg p-6">
+          <div className="mb-4 p-4 bg-blue-50 rounded-lg">
+            <p className="text-sm text-gray-700">Available Balance: <span className="font-bold text-green-600">${(currentUser?.balance || 0).toFixed(2)}</span></p>
+          </div>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Withdrawal Amount ($)</label>
+              <input type="number" required value={formData.amount} onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-600 focus:border-transparent" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Account Number</label>
+              <input type="text" required value={formData.accountNumber} onChange={(e) => setFormData({ ...formData, accountNumber: e.target.value })}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-600 focus:border-transparent" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Bank Name</label>
+              <input type="text" required value={formData.bankName} onChange={(e) => setFormData({ ...formData, bankName: e.target.value })}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-600 focus:border-transparent" />
+            </div>
+            {success && (
+              <div className="bg-green-50 text-green-600 p-3 rounded-lg flex items-center">
+                <CheckCircle className="w-5 h-5 mr-2" />Withdrawal request submitted successfully!
+              </div>
+            )}
+            {error && <div className="bg-red-50 text-red-600 p-3 rounded-lg">{error}</div>}
+            <button type="submit" className="w-full bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 transition">
+              Request Withdrawal
+            </button>
+          </form>
+        </div>
+        <div className="bg-white rounded-xl shadow-lg p-6">
+          <h3 className="text-xl font-bold text-blue-900 mb-4">Withdrawal History</h3>
+          {userWithdrawals.length > 0 ? (
+            <div className="space-y-3">
+              {userWithdrawals.map((w) => (
+                <div key={w.id} className="p-4 bg-gray-50 rounded-lg">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="font-semibold text-blue-900">${w.amount.toFixed(2)}</span>
+                    <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                      w.status === 'approved' ? 'bg-green-100 text-green-700' :
+                      w.status === 'rejected' ? 'bg-red-100 text-red-700' :
+                      'bg-yellow-100 text-yellow-700'
+                    }`}>{w.status.toUpperCase()}</span>
+                  </div>
+                  <p className="text-sm text-gray-600">{w.bankName} - {w.accountNumber}</p>
+                  <p className="text-xs text-gray-500 mt-1">{new Date(w.requestDate).toLocaleString()}</p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-gray-600 text-center py-8">No withdrawal requests yet.</p>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const TransactionHistory = () => {
+    const userTransactions = transactions.filter(t => t.userId === currentUser?.id);
+
+    return (
+      <div className="space-y-6">
+        <h2 className="text-2xl font-bold text-blue-900">Transaction History</h2>
+        <div className="bg-white rounded-xl shadow-lg p-6">
+          {userTransactions.length > 0 ? (
+            <div className="space-y-3">
+              {userTransactions.map((t) => (
+                <div key={t.id} className="p-4 bg-gray-50 rounded-lg flex items-center justify-between">
+                  <div>
+                    <p className="font-semibold text-blue-900 capitalize">{t.type}</p>
+                    <p className="text-sm text-gray-600">{new Date(t.date).toLocaleString()}</p>
+                    <span className={`text-xs px-2 py-1 rounded-full ${
+                      t.status === 'completed' || t.status === 'approved' ? 'bg-green-100 text-green-700' :
+                      t.status === 'rejected' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'
+                    }`}>{t.status}</span>
+                  </div>
+                  <p className={`text-xl font-bold ${t.type === 'investment' ? 'text-green-600' : 'text-orange-600'}`}>
+                    {t.type === 'investment' ? '+' : '-'}${t.amount.toFixed(2)}
+                  </p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-gray-600 text-center py-8">No transactions yet.</p>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const ProfilePage = () => {
+    const [formData, setFormData] = useState({
+      username: currentUser?.username || '',
+      email: currentUser?.email || '',
+      newPassword: ''
+    });
+    const [success, setSuccess] = useState(false);
+
+    const handleUpdate = async (e) => {
+      e.preventDefault();
+      const updatedUsers = users.map(u => {
+        if (u.id === currentUser.id) {
+          const updated = { ...u, username: formData.username, email: formData.email };
+          if (formData.newPassword) updated.password = formData.newPassword;
+          setCurrentUser(updated);
+          return updated;
+        }
+        return u;
+      });
+      await saveUsers(updatedUsers);
+      setSuccess(true);
+      setTimeout(() => setSuccess(false), 3000);
+    };
+
+    return (
+      <div className="space-y-6">
+        <h2 className="text-2xl font-bold text-blue-900">Profile Settings</h2>
+        <div className="bg-white rounded-xl shadow-lg p-6">
+          <form onSubmit={handleUpdate} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Username</label>
+              <input type="text" value={formData.username} onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-600 focus:border-transparent" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
+              <input type="email" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-600 focus:border-transparent" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">New Password (leave blank to keep current)</label>
+              <input type="password" value={formData.newPassword} onChange={(e) => setFormData({ ...formData, newPassword: e.target.value })}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-600 focus:border-transparent" />
+            </div>
+            {success && (
+              <div className="bg-green-50 text-green-600 p-3 rounded-lg flex items-center">
+                <CheckCircle className="w-5 h-5 mr-
