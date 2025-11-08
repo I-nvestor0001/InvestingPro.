@@ -1,801 +1,1745 @@
-import React, { useState, useEffect } from 'react';
-import { DollarSign, Users, TrendingUp, LogOut, Home, Briefcase, Link2, CreditCard, User, History, CheckCircle, XCircle, Clock } from 'lucide-react';
+<div class="form-group">
+                    <label class="form-label">Full Name</label>
+                    <input type="text" class="form-input" id="registerName" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Email</label>
+                    <input type="email" class="form-input" id="registerEmail" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Phone</label>
+                    <input type="tel" class="form-input" id="registerPhone" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Password</label>
+                    <input type="password" class="form-input" id="registerPassword" required minlength="6">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Referral Code (Optional)</label>
+                    <input type="text" class="form-input" id="registerReferral">
+                </div>
+                <button type="submit" class="btn-primary">Create Account</button>
+            </form>
+            <div class="toggle-link">
+                Have an account? <a onclick="switchToLogin()">Login</a>
+            </div>
+        </div>
+    </div>
 
-const InvestingPro = () => {
-  const [currentPage, setCurrentPage] = useState('login');
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [currentUser, setCurrentUser] = useState(null);
-  const [users, setUsers] = useState([]);
-  const [withdrawals, setWithdrawals] = useState([]);
-  const [transactions, setTransactions] = useState([]);
+    <!-- Purchase Modal -->
+    <div id="purchaseModal" class="modal">
+        <div class="modal-content">
+            <button class="modal-close" onclick="closeModal('purchaseModal')">×</button>
+            <h2>Purchase Plan</h2>
+            <div id="purchaseAlert"></div>
+            <div id="purchaseDetails" class="info-box"></div>
+            <div id="purchaseCompanyInfo" class="info-box"></div>
+            <form onsubmit="confirmPurchase(event)">
+                <div class="form-group">
+                    <label class="form-label">Payment Proof</label>
+                    <textarea class="form-input" id="paymentProof" rows="3" required placeholder="Enter transaction ID or reference"></textarea>
+                </div>
+                <button type="submit" class="btn-primary">Confirm Purchase</button>
+            </form>
+        </div>
+    </div>
 
-  useEffect(() => {
-    initializeStorage();
-  }, []);
+    <script>
+        // PERSISTENT DATA STORAGE
+        const STORAGE_KEY = 'referEarnProData_v2';
+        
+        const PLANS = [
+            { id: 'silver', name: 'Silver Plan', amount: 3000, returns: 9000, days: 23, featured: false },
+            { id: 'gold', name: 'Gold Plan', amount: 10000, returns: 30000, days: 23, featured: true },
+            { id: 'platinum', name: 'Platinum Plan', amount: 15000, returns: 45000, days: 23, featured: false },
+            { id: 'diamond', name: 'Diamond Plan', amount: 30000, returns: 90000, days: 23, featured: false },
+            { id: 'plan100a', name: '100-Day Plan A', amount: 3000, returns: 9000, days: 100, featured: false },
+            { id: 'plan100b', name: '100-Day Plan B', amount: 10000, returns: 30000, days: 100, featured: true },
+            { id: 'plan100c', name: '100-Day Plan C', amount: 30000, returns: 90000, days: 100, featured: false }
+        ];
 
-  const initializeStorage = async () => {
-    try {
-      const usersData = await window.storage.get('investingpro_users');
-      if (!usersData) {
-        const defaultUsers = [{
-          id: '1',
-          email: 'admin@investingpro.com',
-          username: 'admin',
-          password: 'admin123',
-          isAdmin: true
-        }];
-        await window.storage.set('investingpro_users', JSON.stringify(defaultUsers));
-        setUsers(defaultUsers);
-      } else {
-        setUsers(JSON.parse(usersData.value));
-      }
+        let currentUser = null;
+        let selectedPlan = null;
 
-      const withdrawalsData = await window.storage.get('investingpro_withdrawals');
-      if (!withdrawalsData) {
-        await window.storage.set('investingpro_withdrawals', JSON.stringify([]));
-      } else {
-        setWithdrawals(JSON.parse(withdrawalsData.value));
-      }
+        // Initialize Data
+        function initData() {
+            const stored = localStorage.getItem(STORAGE_KEY);
+            if (!stored) {
+                const initialData = {
+                    users: [
+                        {
+                            id: 'admin_001',
+                            name: 'Administrator',
+                            email: 'udofiajoshua04@gmail.com',
+                            password: 'Saturday1234',
+                            phone: '',
+                            isAdmin: true,
+                            isActive: true,
+                            referralCode: 'ADMIN2025',
+                            wallet: { balance: 0, totalDeposited: 0, totalWithdrawn: 0, referralEarnings: 0 },
+                            createdAt: new Date().toISOString()
+                        }
+                    ],
+                    investments: [],
+                    withdrawals: [],
+                    referrals: [],
+                    settings: {
+                        companyAccount: {
+                            accountNumber: '6141876934',
+                            bankName: 'OPay',
+                            accountName: 'JOSHUA SATURDAY UDOFIA'
+                        }
+                    }
+                };
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(initialData));
+                return initialData;
+            }
+            return JSON.parse(stored);
+        }
 
-      const transactionsData = await window.storage.get('investingpro_transactions');
-      if (!transactionsData) {
-        await window.storage.set('investingpro_transactions', JSON.stringify([]));
-      } else {
-        setTransactions(JSON.parse(transactionsData.value));
-      }
-    } catch (error) {
-      console.error('Storage initialization error:', error);
-    }
-  };
+        function saveData(data) {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+        }
 
-  const saveUsers = async (updatedUsers) => {
-    await window.storage.set('investingpro_users', JSON.stringify(updatedUsers));
-    setUsers(updatedUsers);
-  };
+        function generateId() {
+            return Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        }
 
-  const saveWithdrawals = async (updatedWithdrawals) => {
-    await window.storage.set('investingpro_withdrawals', JSON.stringify(updatedWithdrawals));
-    setWithdrawals(updatedWithdrawals);
-  };
+        function generateReferralCode() {
+            return 'REF' + Date.now().toString(36).toUpperCase();
+        }
 
-  const saveTransactions = async (updatedTransactions) => {
-    await window.storage.set('investingpro_transactions', JSON.stringify(updatedTransactions));
-    setTransactions(updatedTransactions);
-  };
+        // Check Session
+        function checkSession() {
+            const userId = localStorage.getItem('currentUserId');
+            if (userId) {
+                const data = initData();
+                const user = data.users.find(u => u.id === userId);
+                if (user) {
+                    currentUser = user;
+                    if (user.isAdmin) {
+                        showAdminDashboard();
+                    } else {
+                        showUserDashboard();
+                    }
+                }
+            }
+        }
 
-  const handleLogin = async (email, password) => {
-    const user = users.find(u => u.email === email && u.password === password);
-    if (user) {
-      setCurrentUser(user);
-      setIsAdmin(user.isAdmin || false);
-      setCurrentPage(user.isAdmin ? 'admin-dashboard' : 'dashboard');
-      return true;
-    }
-    return false;
-  };
+        // Auth Functions
+        function handleLogin(e) {
+            e.preventDefault();
+            const email = document.getElementById('loginEmail').value.trim();
+            const password = document.getElementById('loginPassword').value;
 
-  const handleSignup = async (email, username, password, referralCode) => {
-    if (users.find(u => u.email === email)) {
-      return { success: false, message: 'Email already exists' };
-    }
+            const data = initData();
+            const user = data.users.find(u => u.email === email && u.password === password);
 
-    const newUser = {
-      id: Date.now().toString(),
-      email,
-      username,
-      password,
-      balance: 0,
-      totalInvested: 0,
-      profit: 0,
-      referralCode: 'INV' + Math.random().toString(36).substr(2, 8).toUpperCase(),
-      referredBy: referralCode,
-      referrals: [],
-      isAdmin: false,
-      createdAt: new Date().toISOString()
-    };
+            if (!user) {
+                showAlert('loginAlert', '❌ Invalid email or password', 'error');
+                return;
+            }
 
-    const updatedUsers = [...users, newUser];
+            if (!user.isActive && !user.isAdmin) {
+                showAlert('loginAlert', '❌ Account deactivated. Contact admin.', 'error');
+                return;
+            }
 
-    if (referralCode) {
-      const referrer = updatedUsers.find(u => u.referralCode === referralCode);
-      if (referrer) {
-        if (!referrer.referrals) referrer.referrals = [];
-        referrer.referrals.push({
-          userId: newUser.id,
-          username: newUser.username,
-          date: new Date().toISOString()
+            currentUser = user;
+            localStorage.setItem('currentUserId', user.id);
+            closeModal('loginModal');
+
+            if (user.isAdmin) {
+                showAdminDashboard();
+            } else {
+                showUserDashboard();
+            }
+        }
+
+        function handleRegister(e) {
+            e.preventDefault();
+            const name = document.getElementById('registerName').value.trim();
+            const email = document.getElementById('registerEmail').value.trim();
+            const phone = document.getElementById('registerPhone').value.trim();
+            const password = document.getElementById('registerPassword').value;
+            const referralCode = document.getElementById('registerReferral').value.trim();
+
+            const data = initData();
+
+            if (data.users.find(u => u.email === email)) {
+                showAlert('registerAlert', '❌ Email already registered', 'error');
+                return;
+            }
+
+            const newUser = {
+                id: generateId(),
+                name,
+                email,
+                phone,
+                password,
+                isAdmin: false,
+                isActive: true,
+                referralCode: generateReferralCode(),
+                referredBy: referralCode || null,
+                wallet: { balance: 0, totalDeposited: 0, totalWithdrawn: 0, referralEarnings: 0 },
+                createdAt: new Date().toISOString()
+            };
+
+            data.users.push(newUser);
+
+            // Add referral entry
+            if (referralCode) {
+                const referrer = data.users.find(u => u.referralCode === referralCode);
+                if (referrer) {
+                    data.referrals.push({
+                        id: generateId(),
+                        referrerId: referrer.id,
+                        referredUserId: newUser.id,
+                        referredUserName: newUser.name,
+                        referredUserEmail: newUser.email,
+                        hasPurchased: false,
+                        earningPaid: false,
+                        joinDate: new Date().toISOString()
+                    });
+                }
+            }
+
+            saveData(data);
+
+            showAlert('registerAlert', '✅ Account created! Please login.', 'success');
+            setTimeout(() => {
+                closeModal('registerModal');
+                document.getElementById('loginEmail').value = email;
+                showLogin();
+            }, 2000);
+        }
+
+        function logout() {
+            localStorage.removeItem('currentUserId');
+            currentUser = null;
+            document.getElementById('landingPage').style.display = 'block';
+            document.getElementById('userDashboard').style.display = 'none';
+            document.getElementById('adminDashboard').classList.add('hidden');
+            document.getElementById('navButtons').innerHTML = '<button class="nav-btn" onclick="showLogin()">Login</button>';
+        }
+
+        // User Dashboard
+        function showUserDashboard() {
+            document.getElementById('landingPage').style.display = 'none';
+            document.getElementById('userDashboard').style.display = 'block';
+            document.getElementById('adminDashboard').classList.add('hidden');
+            document.getElementById('navButtons').innerHTML = '<button class="nav-btn" onclick="logout()">Logout</button>';
+            loadUserDashboard();
+        }
+
+        function loadUserDashboard() {
+            const data = initData();
+            currentUser = data.users.find(u => u.id === currentUser.id);
+
+            // Update wallet
+            document.getElementById('walletBalance').textContent = '₦' + currentUser.wallet.balance.toLocaleString();
+            document.getElementById('walletDeposited').textContent = '₦' + currentUser.wallet.totalDeposited.toLocaleString();
+            document.getElementById('walletWithdrawn').textContent = '₦' + currentUser.wallet.totalWithdrawn.toLocaleString();
+            
+            const userReferrals = data.referrals.filter(r => r.referrerId === currentUser.id);
+            document.getElementById('walletReferrals').textContent = userReferrals.length;
+            document.getElementById('walletRefEarnings').textContent = '₦' + currentUser.wallet.referralEarnings.toLocaleString();
+
+            // Load plans
+            loadUserPlans();
+
+            // Load investments
+            loadUserInvestments(data);
+
+            // Load referrals
+            loadUserReferrals(data);
+
+            // Load referral link
+            const refLink = window.location.origin + window.location.pathname + '?ref=' + currentUser.referralCode;
+            document.getElementById('userReferralLink').textContent = refLink;
+        }
+
+        function loadUserPlans() {
+            const html = PLANS.map(plan => {
+                const roi = Math.round((plan.returns - plan.amount) / plan.amount * 100);
+                return `
+                    <div class="plan-card ${plan.featured ? 'featured' : ''}">
+                        ${plan.featured ? '<div class="plan-badge">⭐ Popular</div>' : ''}
+                        <div class="plan-name">${plan.name}</div>
+                        <div class="plan-amount">₦${plan.amount.toLocaleString()}</div>
+                        <div class="plan-return">Returns: ₦${plan.returns.toLocaleString()}</div>
+                        <div class="plan-info">
+                            <span>📅 ${plan.days} days</span>
+                            <span>🚀 ${roi}% ROI</span>
+                        </div>
+                        <button class="btn-invest" onclick="openPurchaseModal('${plan.id}')">Invest Now</button>
+                    </div>
+                `;
+            }).join('');
+            document.getElementById('userPlansGrid').innerHTML = html;
+        }
+
+        function loadUserInvestments(data) {
+            const investments = data.investments.filter(inv => inv.userId === currentUser.id);
+            
+            if (investments.length === 0) {
+                document.getElementById('userInvestmentsList').innerHTML = '<div class="empty-state"><div class="empty-icon">📊</div><p>No investments yet</p></div>';
+                return;
+            }
+
+            const html = investments.map(inv => `
+                <div class="investment-item">
+                    <div class="inv-header">
+                        <div class="inv-plan">${inv.planName}</div>
+                        <div class="inv-badge inv-badge-${inv.status}">${inv.status}</div>
+                    </div>
+                    <div class="inv-info">📅 ${new Date(inv.purchaseDate).toLocaleDateString()} - ${new Date(inv.maturityDate).toLocaleDateString()}</div>
+                    <div class="inv-amounts">
+                        <div class="inv-amount">
+                            <span class="inv-amount-value" style="color: var(--primary);">₦${inv.amount.toLocaleString()}</span>
+                            <span class="inv-amount-label">Invested</span>
+                        </div>
+                        <div class="inv-amount">
+                            <span class="inv-amount-value" style="color: var(--success);">₦${inv.expectedReturn.toLocaleString()}</span>
+                            <span class="inv-amount-label">Returns</span>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+
+            document.getElementById('userInvestmentsList').innerHTML = html;
+        }
+
+        function loadUserReferrals(data) {
+            const referrals = data.referrals.filter(r => r.referrerId === currentUser.id);
+            
+            if (referrals.length === 0) {
+                document.getElementById('userReferralsList').innerHTML = '<div class="empty-state"><div class="empty-icon">🤝</div><p>No referrals yet</p></div>';
+                return;
+            }
+
+            const html = referrals.map(ref => `
+                <div class="user-item">
+                    <div class="user-header">
+                        <div class="user-name">${ref.referredUserName}</div>
+                        <div class="user-badge ${ref.hasPurchased ? 'old' : 'new'}">${ref.hasPurchased ? '✓ Invested' : 'Pending'}</div>
+                    </div>
+                    <div class="user-email">${ref.referredUserEmail}</div>
+                    <div style="font-size: 0.85rem; color: #64748b;">Joined: ${new Date(ref.joinDate).toLocaleDateString()}</div>
+                    ${ref.earningPaid ? '<div style="color: var(--success); font-weight: 600; margin-top: 0.5rem;">✅ Earned: ₦1,500</div>' : ''}
+                </div>
+            `).join('');
+
+            document.getElementById('userReferralsList').innerHTML = html;
+        }
+
+        function openPurchaseModal(planId) {
+            selectedPlan = PLANS.find(p => p.id === planId);
+            const data = initData();
+
+            document.getElementById('purchaseDetails').innerHTML = `
+                <strong>${selectedPlan.name}</strong><br>
+                💰 Amount: ₦${selectedPlan.amount.toLocaleString()}<br>
+                📈 Returns: ₦${selectedPlan.returns.toLocaleString()}<br>
+                ⏰ Duration: ${selectedPlan.days} days
+            `;
+
+            document.getElementById('purchaseCompanyInfo').innerHTML = `
+                <strong>Transfer to:</strong><br>
+                🏦 ${data.settings.companyAccount.bankName}<br>
+                💳 ${data.settings.companyAccount.accountNumber}<br>
+                👤 ${data.settings.companyAccount.accountName}
+            `;
+
+            document.getElementById('purchaseModal').style.display = 'block';
+        }
+
+        function confirmPurchase(e) {
+            e.preventDefault();
+            const paymentProof = document.getElementById('paymentProof').value.trim();
+
+            const data = initData();
+            const maturityDate = new Date();
+            maturityDate.setDate(maturityDate.getDate() + selectedPlan.days);
+
+            data.investments.push({
+                id: generateId(),
+                userId: currentUser.id,
+                userName: currentUser.name,
+                userEmail: currentUser.email,
+                planId: selectedPlan.id,
+                planName: selectedPlan.name,
+                amount: selectedPlan.amount,
+                expectedReturn: selectedPlan.returns,
+                duration: selectedPlan.days,
+                paymentProof,
+                status: 'pending',
+                purchaseDate: new Date().toISOString(),
+                maturityDate: maturityDate.toISOString()
+            });
+
+            saveData(data);
+
+            showAlert('purchaseAlert', '✅ Investment submitted! Waiting for admin approval.', 'success');
+            document.getElementById('paymentProof').value = '';
+
+            setTimeout(() => {
+                closeModal('purchaseModal');
+                loadUserDashboard();
+            }, 2000);
+        }
+
+        function submitWithdrawal(e) {
+            e.preventDefault();
+            const amount = parseFloat(document.getElementById('withdrawAmount').value);
+            const bank = document.getElementById('withdrawBank').value.trim();
+            const account = document.getElementById('withdrawAccount').value.trim();
+            const name = document.getElementById('withdrawName').value.trim();
+
+            if (amount > currentUser.wallet.balance) {
+                showAlert('withdrawAlert', '❌ Insufficient balance', 'error');
+                return;
+            }
+
+            const data = initData();
+            data.withdrawals.push({
+                id: generateId(),
+                userId: currentUser.id,
+                userName: currentUser.name,
+                userEmail: currentUser.email,
+                amount,
+                bankName: bank,
+                accountNumber: account,
+                accountName: name,
+                status: 'pending',
+                requestDate: new Date().toISOString()
+            });
+
+            saveData(data);
+
+            showAlert('withdrawAlert', '✅ Withdrawal request submitted!', 'success');
+            e.target.reset();
+        }
+
+        function copyLink() {
+            const link = document.getElementById('userReferralLink').textContent;
+            navigator.clipboard.writeText(link).then(() => {
+                alert('✅ Link copied to clipboard!');
+            });
+        }
+
+        // Admin Dashboard
+        function showAdminDashboard() {
+            document.getElementById('landingPage').style.display = 'none';
+            document.getElementById('userDashboard').style.display = 'none';
+            document.getElementById('adminDashboard').classList.remove('hidden');
+            document.getElementById('navButtons').innerHTML = '<button class="nav-btn" onclick="logout()">Logout</button>';
+            loadAdminDashboard();
+        }
+
+        function loadAdminDashboard() {
+            const data = initData();
+            currentUser = data.users.find(u => u.id === currentUser.id);
+
+            const regularUsers = data.users.filter(u => !u.isAdmin);
+            const totalInvested = data.investments.filter(inv => inv.status === 'active').reduce((sum, inv) => sum + inv.amount, 0);
+            const totalDeposits = regularUsers.reduce((sum, u) => sum + u.wallet.totalDeposited, 0);
+            const pendingCount = data.investments.filter(inv => inv.status === 'pending').length;
+
+            document.getElementById('adminTotalUsers').textContent = regularUsers.length;
+            document.getElementById('adminTotalInvested').textContent = '₦' + totalInvested.toLocaleString();
+            document.getElementById('adminTotalDeposits').textContent = '₦' + totalDeposits.toLocaleString();
+            document.getElementById('adminPending').textContent = pendingCount;
+
+            loadAdminUsers(data);
+            loadAdminInvestments(data);
+            loadAdminWithdrawals(data);
+            loadAdminSettings(data);
+        }
+
+        function loadAdminUsers(data) {
+            const users = data.users.filter(u => !u.isAdmin);
+            
+            if (users.length === 0) {
+                document.getElementById('adminUsersList').innerHTML = '<div class="empty-state"><div class="empty-icon">👥</div><p>No users yet</p></div>';
+                return;
+            }
+
+            // Sort: newest first
+            users.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+            const html = users.map(user => {
+                const userInvestments = data.investments.filter(inv => inv.userId === user.id);
+                const activeInvestments = userInvestments.filter(inv => inv.status === 'active');
+                const totalInvested = activeInvestments.reduce((sum, inv) => sum + inv.amount, 0);
+                
+                const daysSinceJoin = Math.floor((new Date() - new Date(user.createdAt)) / (1000 * 60 * 60 * 24));
+                const isNew = daysSinceJoin <= 7;
+
+                return `
+                    <div class="user-item">
+                        <div class="user-header">
+                            <div class="user-name">${user.name}</div>
+                            <div class="user-badge ${isNew ? 'new' : 'old'}">${isNew ? '🆕 New' : '⭐ Member'}</div>
+                        </div>
+                        <div class="user-email">📧 ${user.email} | 📱 ${user.phone}</div>
+                        <div class="user-stats">
+                            <div class="user-stat">
+                                <span class="user-stat-value">₦${user.wallet.balance.toLocaleString()}</span>
+                                <span class="user-stat-label">Balance</span>
+                            </div>
+                            <div class="user-stat">
+                                <span class="user-stat-value">₦${totalInvested.toLocaleString()}</span>
+                                <span class="user-stat-label">Invested</span>
+                            </div>
+                            <div class="user-stat">
+                                <span class="user-stat-value">${userInvestments.length}</span>
+                                <span class="user-stat-label">Investments</span>
+                            </div>
+                        </div>
+                        <div class="admin-actions">
+                            ${user.isActive ? 
+                                `<button class="btn-small btn-reject" onclick="toggleUserStatus('${user.id}', false)">🚫 Deactivate</button>` :
+                                `<button class="btn-small btn-approve" onclick="toggleUserStatus('${user.id}', true)">✅ Activate</button>`
+                            }
+                            <button class="btn-small btn-reject" onclick="deleteUser('${user.id}')">🗑️ Delete</button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            document.getElementById('adminUsersList').innerHTML = html;
+        }
+
+        function loadAdminInvestments(data) {
+            const pending = data.investments.filter(inv => inv.status === 'pending');
+            const active = data.investments.filter(inv => inv.status === 'active');
+
+            // Pending
+            if (pending.length === 0) {
+                document.getElementById('adminPendingList').innerHTML = '<div class="empty-state"><div class="empty-icon">⏳</div><p>No pending investments</p></div>';
+            } else {
+                const html = pending.map(inv => `
+                    <div class="investment-item">
+                        <div class="inv-header">
+                            <div class="inv-plan">${inv.planName}</div>
+                            <div class="inv-badge inv-badge-pending">Pending</div>
+                        </div>
+                        <div class="inv-info">👤 ${inv.userName} (${inv.userEmail})</div>
+                        <div class="inv-info">📅 ${new Date(inv.purchaseDate).toLocaleDateString()}</div>
+                        <div class="inv-info">💳 Proof: ${inv.paymentProof}</div>
+                        <div class="inv-amounts">
+                            <div class="inv-amount">
+                                <span class="inv-amount-value" style="color: var(--primary);">₦${inv.amount.toLocaleString()}</span>
+                                <span class="inv-amount-label">Amount</span>
+                            </div>
+                            <div class="inv-amount">
+                                <span class="inv-amount-value" style="color: var(--success);">₦${inv.expectedReturn.toLocaleString()}</span>
+                                <span class="inv-amount-label">Returns</span>
+                            </div>
+                        </div>
+                        <div class="admin-actions">
+                            <button class="btn-small btn-approve" onclick="approveInvestment('${inv.id}')">✅ Approve</button>
+                            <button class="btn-small btn-reject" onclick="rejectInvestment('${inv.id}')">❌ Reject</button>
+                        </div>
+                    </div>
+                `).join('');
+                document.getElementById('adminPendingList').innerHTML = html;
+            }
+
+            // Active
+            if (active.length === 0) {
+                document.getElementById('adminActiveList').innerHTML = '<div class="empty-state"><div class="empty-icon">📊</div><p>No active investments</p></div>';
+            } else {
+                const html = active.map(inv => `
+                    <div class="investment-item">
+                        <div class="inv-header">
+                            <div class="inv-plan">${inv.planName}</div>
+                            <div class="inv-badge inv-badge-active">Active</div>
+                        </div>
+                        <div class="inv-info">👤 ${inv.userName}</div>
+                        <div class="inv-info">📅 ${new Date(inv.purchaseDate).toLocaleDateString()} → ${new Date(inv.maturityDate).toLocaleDateString()}</div>
+                        <div class="inv-amounts">
+                            <div class="inv-amount">
+                                <span class="inv-amount-value" style="color: var(--primary);">₦${inv.amount.toLocaleString()}</span>
+                                <span class="inv-amount-label">Invested</span>
+                            </div>
+                            <div class="inv-amount">
+                                <span class="inv-amount-value" style="color: var(--success);">₦${inv.expectedReturn.toLocaleString()}</span>
+                                <span class="inv-amount-label">Returns</span>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+                document.getElementById('adminActiveList').innerHTML = html;
+            }
+        }
+
+        function loadAdminWithdrawals(data) {
+            const withdrawals = data.withdrawals.filter(wd => wd.status === 'pending');
+            
+            if (withdrawals.length === 0) {
+                document.getElementById('adminWithdrawalsList').innerHTML = '<div class="empty-state"><div class="empty-icon">💸</div><p>No pending withdrawals</p></div>';
+                return;
+            }
+
+            const html = withdrawals.map(wd => `
+                <div class="investment-item">
+                    <div class="inv-header">
+                        <div class="inv-plan">Withdrawal Request</div>
+                        <div class="inv-badge inv-badge-pending">Pending</div>
+                    </div>
+                    <div class="inv-info">👤 ${wd.userName} (${wd.userEmail})</div>
+                    <div class="inv-info">💰 Amount: ₦${wd.amount.toLocaleString()}</div>
+                    <div class="inv-info">🏦 ${wd.bankName}</div>
+                    <div class="inv-info">💳 ${wd.accountNumber} - ${wd.accountName}</div>
+                    <div class="inv-info">📅 ${new Date(wd.requestDate).toLocaleDateString()}</div>
+                    <div class="admin-actions">
+                        <button class="btn-small btn-approve" onclick="approveWithdrawal('${wd.id}')">✅ Approve</button>
+                        <button class="btn-small btn-reject" onclick="rejectWithdrawal('${wd.id}')">❌ Reject</button>
+                    </div>
+                </div>
+            `).join('');
+
+            document.getElementById('adminWithdrawalsList').innerHTML = html;
+        }
+
+        function loadAdminSettings(data) {
+            document.getElementById('adminAccNumber').value = data.settings.companyAccount.accountNumber;
+            document.getElementById('adminBank').value = data.settings.companyAccount.bankName;
+            document.getElementById('adminAccName').value = data.settings.companyAccount.accountName;
+        }
+
+        function approveInvestment(invId) {
+            if (!confirm('Approve this investment?')) return;
+
+            const data = initData();
+            const inv = data.investments.find(i => i.id === invId);
+            const user = data.users.find(u => u.id === inv.userId);
+
+            inv.status = 'active';
+            inv.approvedDate = new Date().toISOString();
+
+            user.wallet.totalDeposited += inv.amount;
+            user.wallet.balance += inv.expectedReturn;
+
+            // Check referral bonus
+            const userInvestments = data.investments.filter(i => i.userId === user.id && i.status === 'active');
+            if (userInvestments.length === 1 && user.referredBy) {
+                const referrer = data.users.find(u => u.referralCode === user.referredBy);
+                if (referrer) {
+                    const referral = data.referrals.find(r => r.referrerId === referrer.id && r.referredUserId === user.id);
+                    if (referral && !referral.earningPaid) {
+                        referrer.wallet.balance += 1500;
+                        referrer.wallet.referralEarnings += 1500;
+                        referral.hasPurchased = true;
+                        referral.earningPaid = true;
+                    }
+                }
+            }
+
+            saveData(data);
+            alert('✅ Investment approved!');
+            loadAdminDashboard();
+        }
+
+        function rejectInvestment(invId) {
+            if (!confirm('Reject this investment?')) return;
+
+            const data = initData();
+            data.investments = data.investments.filter(i => i.id !== invId);
+            saveData(data);
+
+            alert('❌ Investment rejected!');
+            loadAdminDashboard();
+        }
+
+        function approveWithdrawal(wdId) {
+            if (!confirm('Approve this withdrawal? Make sure payment is sent!')) return;
+
+            const data = initData();
+            const wd = data.withdrawals.find(w => w.id === wdId);
+            const user = data.users.find(u => u.id === wd.userId);
+
+            user.wallet.balance -= wd.amount;
+            user.wallet.totalWithdrawn += wd.amount;
+
+            wd.status = 'completed';
+            wd.completedDate = new Date().toISOString();
+
+            saveData(data);
+            alert('✅ Withdrawal approved!');
+            loadAdminDashboard();
+        }
+
+        function rejectWithdrawal(wdId) {
+            if (!confirm('Reject this withdrawal?')) return;
+
+            const data = initData();
+            data.withdrawals = data.withdrawals.filter(w => w.id !== wdId);
+            saveData(data);
+
+            alert('❌ Withdrawal rejected!');
+            loadAdminDashboard();
+        }
+
+        function toggleUserStatus(userId, activate) {
+            if (!confirm(activate ? 'Activate this user?' : 'Deactivate this user?')) return;
+
+            const data = initData();
+            const user = data.users.find(u => u.id === userId);
+            user.isActive = activate;
+
+            saveData(data);
+            alert(activate ? '✅ User activated!' : '🚫 User deactivated!');
+            loadAdminDashboard();
+        }
+
+        function deleteUser(userId) {
+            if (!confirm('⚠️ DELETE this user permanently? This cannot be undone!')) return;
+            if (!confirm('Are you absolutely sure?')) return;
+
+            const data = initData();
+            data.users = data.users.filter(u => u.id !== userId);
+            data.investments = data.investments.filter(inv => inv.userId !== userId);
+            data.withdrawals = data.withdrawals.filter(wd => wd.userId !== userId);
+            data.referrals = data.referrals.filter(r => r.referrerId !== userId && r.referredUserId !== userId);
+
+            saveData(data);
+            alert('✅ User deleted!');
+            loadAdminDashboard();
+        }
+
+        function updateCompanyAccount(e) {
+            e.preventDefault();
+
+            const data = initData();
+            data.settings.companyAccount = {
+                accountNumber: document.getElementById('adminAccNumber').value.trim(),
+                bankName: document.getElementById('adminBank').value.trim(),
+                accountName: document.getElementById('adminAccName').value.trim()
+            };
+
+            saveData(data);
+            alert('✅ Company account updated!');
+        }
+
+        // Color Theme
+        function changeColor(primary, secondary, accent) {
+            document.documentElement.style.setProperty('--primary', primary);
+            document.documentElement.style.setProperty('--secondary', secondary);
+            document.documentElement.style.setProperty('--accent', accent);
+
+            // Save preference
+            localStorage.setItem('themeColors', JSON.stringify({ primary, secondary, accent }));
+
+            // Update active state
+            document.querySelectorAll('.color-option').forEach(opt => opt.classList.remove('active'));
+            event.target.classList.add('active');
+        }
+
+        // Load saved theme
+        function loadTheme() {
+            const saved = localStorage.getItem('themeColors');
+            if (saved) {
+                const colors = JSON.parse(saved);
+                document.documentElement.style.setProperty('--primary', colors.primary);
+                document.documentElement.style.setProperty('--secondary', colors.secondary);
+                document.documentElement.style.setProperty('--accent', colors.accent);
+            }
+        }
+
+        // Tab Navigation
+        function showUserTab(tab) {
+            document.querySelectorAll('#userDashboard .tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('#userDashboard .tab-content').forEach(c => c.classList.remove('active'));
+            
+            event.target.classList.add('active');
+            document.getElementById(`tab-${tab}`).classList.add('active');
+        }
+
+        function showAdminTab(tab) {
+            document.querySelectorAll('#adminDashboard .tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('#adminDashboard .tab-content').forEach(c => c.classList.remove('active'));
+            
+            event.target.classList.add('active');
+            document.getElementById(`admin-tab-${tab}`).classList.add('active');
+        }
+
+        // Modal Functions
+        function showLogin() {
+            document.getElementById('loginModal').style.display = 'block';
+        }
+
+        function showRegister() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const ref = urlParams.get('ref');
+            if (ref) {
+                document.getElementById('registerReferral').value = ref;
+            }
+            document.getElementById('registerModal').style.display = 'block';
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).style.display = 'none';
+        }
+
+        function switchToRegister() {
+            closeModal('loginModal');
+            showRegister();
+        }
+
+        function switchToLogin() {
+            closeModal('registerModal');
+            showLogin();
+        }
+
+        function showAlert(id, message, type) {
+            const el = document.getElementById(id);
+            el.innerHTML = `<div class="alert alert-${type}">${message}</div>`;
+            setTimeout(() => el.innerHTML = '', 5000);
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            initData();
+            loadTheme();
+            checkSession();
+
+            // Check for referral in URL
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('ref')) {
+                showRegister();
+            }
         });
-      }
-    }
 
-    await saveUsers(updatedUsers);
-    return { success: true, message: 'Account created successfully!' };
-  };
-
-  const handleInvestment = async (amount) => {
-    if (!currentUser || amount <= 0) return false;
-
-    const updatedUsers = users.map(u => {
-      if (u.id === currentUser.id) {
-        const updated = {
-          ...u,
-          totalInvested: (u.totalInvested || 0) + amount,
-          balance: (u.balance || 0) + amount
+        // Close modal on outside click
+        window.onclick = (e) => {
+            if (e.target.classList.contains('modal')) {
+                e.target.style.display = 'none';
+            }
         };
-        setCurrentUser(updated);
-        return updated;
-      }
-      return u;
-    });
-
-    if (currentUser.referredBy) {
-      const referrer = updatedUsers.find(u => u.referralCode === currentUser.referredBy);
-      if (referrer) {
-        const commission = amount * 0.1;
-        referrer.balance = (referrer.balance || 0) + commission;
-        referrer.profit = (referrer.profit || 0) + commission;
-      }
-    }
-
-    await saveUsers(updatedUsers);
-
-    const newTransaction = {
-      id: Date.now().toString(),
-      userId: currentUser.id,
-      type: 'investment',
-      amount,
-      date: new Date().toISOString(),
-      status: 'completed'
-    };
-    await saveTransactions([...transactions, newTransaction]);
-    return true;
-  };
-
-  const handleWithdrawalRequest = async (amount, accountNumber, bankName) => {
-    if (!currentUser || amount <= 0 || amount > currentUser.balance) return false;
-
-    const newWithdrawal = {
-      id: Date.now().toString(),
-      userId: currentUser.id,
-      username: currentUser.username,
-      amount,
-      accountNumber,
-      bankName,
-      status: 'pending',
-      requestDate: new Date().toISOString()
-    };
-
-    await saveWithdrawals([...withdrawals, newWithdrawal]);
-
-    const newTransaction = {
-      id: Date.now().toString(),
-      userId: currentUser.id,
-      type: 'withdrawal',
-      amount,
-      date: new Date().toISOString(),
-      status: 'pending'
-    };
-    await saveTransactions([...transactions, newTransaction]);
-    return true;
-  };
-
-  const handleWithdrawalUpdate = async (withdrawalId, newStatus) => {
-    const updatedWithdrawals = withdrawals.map(w => 
-      w.id === withdrawalId ? { ...w, status: newStatus, processedDate: new Date().toISOString() } : w
-    );
-
-    await saveWithdrawals(updatedWithdrawals);
-
-    if (newStatus === 'approved') {
-      const withdrawal = withdrawals.find(w => w.id === withdrawalId);
-      const updatedUsers = users.map(u => 
-        u.id === withdrawal.userId ? { ...u, balance: u.balance - withdrawal.amount } : u
-      );
-      await saveUsers(updatedUsers);
-    }
-
-    const updatedTransactions = transactions.map(t => {
-      const targetWithdrawal = withdrawals.find(w => w.id === withdrawalId);
-      return (t.type === 'withdrawal' && targetWithdrawal && t.userId === targetWithdrawal.userId) 
-        ? { ...t, status: newStatus } : t;
-    });
-    await saveTransactions(updatedTransactions);
-  };
-
-  const LoginPage = () => {
-    const [isLogin, setIsLogin] = useState(true);
-    const [formData, setFormData] = useState({ email: '', username: '', password: '', referralCode: '' });
-    const [error, setError] = useState('');
-
-    const handleSubmit = async (e) => {
-      e.preventDefault();
-      setError('');
-
-      if (isLogin) {
-        const success = await handleLogin(formData.email, formData.password);
-        if (!success) setError('Invalid email or password');
-      } else {
-        const result = await handleSignup(formData.email, formData.username, formData.password, formData.referralCode);
-        if (result.success) {
-          setIsLogin(true);
-          setFormData({ email: '', username: '', password: '', referralCode: '' });
-        } else {
-          setError(result.message);
+    </script>
+</body>
+</html><!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ReferAndEarnPro - Investment Platform</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap');
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
-      }
-    };
 
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-900 to-blue-700 flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8">
-          <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-green-600 rounded-full mb-4">
-              <TrendingUp className="w-8 h-8 text-white" />
+        :root {
+            /* Change these colors easily! */
+            --primary: #6366f1;
+            --secondary: #8b5cf6;
+            --accent: #ec4899;
+            --success: #10b981;
+            --danger: #ef4444;
+            --dark: #1e293b;
+            --light: #f1f5f9;
+            --white: #ffffff;
+        }
+
+        body {
+            font-family: 'Poppins', sans-serif;
+            background: var(--light);
+            color: var(--dark);
+        }
+
+        /* Navbar */
+        .navbar {
+            background: var(--white);
+            padding: 0.75rem 1rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .nav-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .logo {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--primary);
+        }
+
+        .nav-btn {
+            background: var(--primary);
+            color: var(--white);
+            border: none;
+            padding: 0.5rem 1.2rem;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 0.85rem;
+        }
+
+        /* Container */
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 1rem;
+        }
+
+        /* Hero */
+        .hero {
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: var(--white);
+            padding: 2rem 1rem;
+            text-align: center;
+            border-radius: 0 0 30px 30px;
+        }
+
+        .hero h1 {
+            font-size: 1.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .hero p {
+            font-size: 0.9rem;
+            margin-bottom: 1rem;
+            opacity: 0.9;
+        }
+
+        .hero-btn {
+            background: var(--white);
+            color: var(--primary);
+            border: none;
+            padding: 0.75rem 2rem;
+            border-radius: 25px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        /* Dashboard */
+        .dashboard {
+            display: none;
+        }
+
+        /* Wallet Card */
+        .wallet-card {
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: var(--white);
+            padding: 1.5rem;
+            border-radius: 20px;
+            margin-bottom: 1rem;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+
+        .wallet-label {
+            font-size: 0.85rem;
+            opacity: 0.9;
+            margin-bottom: 0.25rem;
+        }
+
+        .wallet-amount {
+            font-size: 2rem;
+            font-weight: 800;
+            margin-bottom: 1rem;
+        }
+
+        .wallet-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 0.5rem;
+        }
+
+        .wallet-item {
+            background: rgba(255,255,255,0.2);
+            padding: 0.75rem;
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        .wallet-item-value {
+            font-size: 1.1rem;
+            font-weight: 700;
+            display: block;
+        }
+
+        .wallet-item-label {
+            font-size: 0.7rem;
+            opacity: 0.9;
+            display: block;
+            margin-top: 0.25rem;
+        }
+
+        /* Tabs */
+        .tabs {
+            display: flex;
+            gap: 0.5rem;
+            overflow-x: auto;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+        }
+
+        .tabs::-webkit-scrollbar {
+            height: 4px;
+        }
+
+        .tabs::-webkit-scrollbar-thumb {
+            background: var(--primary);
+            border-radius: 4px;
+        }
+
+        .tab {
+            background: var(--white);
+            border: none;
+            padding: 0.6rem 1rem;
+            border-radius: 10px;
+            font-weight: 600;
+            cursor: pointer;
+            white-space: nowrap;
+            font-size: 0.85rem;
+            color: var(--dark);
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        }
+
+        .tab.active {
+            background: var(--primary);
+            color: var(--white);
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        /* Card */
+        .card {
+            background: var(--white);
+            padding: 1rem;
+            border-radius: 15px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            margin-bottom: 1rem;
+        }
+
+        .card-title {
+            font-size: 1rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+            color: var(--dark);
+        }
+
+        /* Plans */
+        .plans-grid {
+            display: grid;
+            gap: 1rem;
+        }
+
+        .plan-card {
+            background: var(--white);
+            padding: 1rem;
+            border-radius: 15px;
+            border: 2px solid var(--light);
+            transition: all 0.3s;
+        }
+
+        .plan-card:active {
+            transform: scale(0.98);
+        }
+
+        .plan-card.featured {
+            border-color: var(--accent);
+            background: linear-gradient(135deg, #fff5f7, var(--white));
+        }
+
+        .plan-badge {
+            background: var(--accent);
+            color: var(--white);
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.7rem;
+            font-weight: 700;
+            display: inline-block;
+            margin-bottom: 0.5rem;
+        }
+
+        .plan-name {
+            font-size: 1.1rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        .plan-amount {
+            font-size: 1.5rem;
+            font-weight: 800;
+            color: var(--primary);
+            margin-bottom: 0.25rem;
+        }
+
+        .plan-return {
+            color: var(--success);
+            font-weight: 600;
+            font-size: 0.9rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .plan-info {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.75rem;
+            font-size: 0.85rem;
+            color: #64748b;
+        }
+
+        .btn-invest {
+            width: 100%;
+            padding: 0.75rem;
+            background: var(--primary);
+            color: var(--white);
+            border: none;
+            border-radius: 10px;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+
+        /* User List */
+        .user-item {
+            background: var(--white);
+            padding: 1rem;
+            border-radius: 12px;
+            margin-bottom: 0.75rem;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        }
+
+        .user-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+
+        .user-name {
+            font-weight: 700;
+            font-size: 1rem;
+            color: var(--dark);
+        }
+
+        .user-badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.7rem;
+            font-weight: 600;
+        }
+
+        .user-badge.new {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .user-badge.old {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+
+        .user-email {
+            font-size: 0.85rem;
+            color: #64748b;
+            margin-bottom: 0.5rem;
+        }
+
+        .user-stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 0.5rem;
+            margin-top: 0.75rem;
+        }
+
+        .user-stat {
+            text-align: center;
+            padding: 0.5rem;
+            background: var(--light);
+            border-radius: 8px;
+        }
+
+        .user-stat-value {
+            font-weight: 700;
+            font-size: 0.9rem;
+            color: var(--primary);
+            display: block;
+        }
+
+        .user-stat-label {
+            font-size: 0.7rem;
+            color: #64748b;
+            display: block;
+        }
+
+        /* Investment Item */
+        .investment-item {
+            background: var(--white);
+            padding: 1rem;
+            border-radius: 12px;
+            margin-bottom: 0.75rem;
+            border-left: 4px solid var(--primary);
+        }
+
+        .inv-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+
+        .inv-plan {
+            font-weight: 700;
+            font-size: 1rem;
+        }
+
+        .inv-badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.7rem;
+            font-weight: 600;
+        }
+
+        .inv-badge.pending {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .inv-badge.active {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .inv-badge.completed {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+
+        .inv-info {
+            font-size: 0.85rem;
+            color: #64748b;
+            margin-bottom: 0.25rem;
+        }
+
+        .inv-amounts {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 0.75rem;
+            padding-top: 0.75rem;
+            border-top: 1px solid var(--light);
+        }
+
+        .inv-amount {
+            text-align: center;
+        }
+
+        .inv-amount-value {
+            font-weight: 700;
+            font-size: 1rem;
+            display: block;
+        }
+
+        .inv-amount-label {
+            font-size: 0.7rem;
+            color: #64748b;
+        }
+
+        /* Admin Actions */
+        .admin-actions {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 0.75rem;
+        }
+
+        .btn-small {
+            flex: 1;
+            padding: 0.5rem;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 0.8rem;
+        }
+
+        .btn-approve {
+            background: var(--success);
+            color: var(--white);
+        }
+
+        .btn-reject {
+            background: var(--danger);
+            color: var(--white);
+        }
+
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            overflow-y: auto;
+            padding: 1rem;
+        }
+
+        .modal-content {
+            background: var(--white);
+            max-width: 500px;
+            margin: 2rem auto;
+            padding: 1.5rem;
+            border-radius: 20px;
+            position: relative;
+        }
+
+        .modal-close {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            background: var(--light);
+            border: none;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 1.2rem;
+        }
+
+        .modal h2 {
+            font-size: 1.3rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .modal-subtitle {
+            color: #64748b;
+            margin-bottom: 1.5rem;
+            font-size: 0.85rem;
+        }
+
+        /* Form */
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        .form-label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            font-size: 0.85rem;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 0.75rem;
+            border: 2px solid var(--light);
+            border-radius: 10px;
+            font-size: 0.9rem;
+            font-family: inherit;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        .btn-primary {
+            width: 100%;
+            padding: 0.875rem;
+            background: var(--primary);
+            color: var(--white);
+            border: none;
+            border-radius: 10px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .toggle-link {
+            text-align: center;
+            margin-top: 1rem;
+            font-size: 0.85rem;
+        }
+
+        .toggle-link a {
+            color: var(--primary);
+            cursor: pointer;
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        /* Alert */
+        .alert {
+            padding: 0.75rem;
+            border-radius: 10px;
+            margin-bottom: 1rem;
+            font-size: 0.85rem;
+        }
+
+        .alert-success {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .alert-error {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 2rem 1rem;
+            color: #94a3b8;
+        }
+
+        .empty-icon {
+            font-size: 3rem;
+            margin-bottom: 0.5rem;
+        }
+
+        /* Info Box */
+        .info-box {
+            background: linear-gradient(135deg, #fef3c7, #fef9c3);
+            padding: 1rem;
+            border-radius: 12px;
+            margin-bottom: 1rem;
+            font-size: 0.85rem;
+            border-left: 4px solid var(--accent);
+        }
+
+        .info-box p {
+            margin-bottom: 0.5rem;
+        }
+
+        /* Referral Link */
+        .referral-box {
+            background: var(--light);
+            padding: 1rem;
+            border-radius: 10px;
+            margin-bottom: 1rem;
+        }
+
+        .referral-link {
+            font-size: 0.75rem;
+            font-family: monospace;
+            color: var(--primary);
+            word-break: break-all;
+            margin-bottom: 0.75rem;
+        }
+
+        .btn-copy {
+            width: 100%;
+            padding: 0.75rem;
+            background: var(--accent);
+            color: var(--white);
+            border: none;
+            border-radius: 10px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        /* Settings */
+        .settings-section {
+            margin-bottom: 1.5rem;
+        }
+
+        .settings-title {
+            font-size: 1rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+        }
+
+        .color-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 0.75rem;
+        }
+
+        .color-option {
+            aspect-ratio: 1;
+            border-radius: 15px;
+            cursor: pointer;
+            border: 3px solid transparent;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+        }
+
+        .color-option.active {
+            border-color: var(--dark);
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        @media (min-width: 640px) {
+            .plans-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            .wallet-grid {
+                grid-template-columns: repeat(4, 1fr);
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Navbar -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="logo">💎 ReferAndEarnPro</div>
+            <div id="navButtons">
+                <button class="nav-btn" onclick="showLogin()">Login</button>
             </div>
-            <h1 className="text-3xl font-bold text-blue-900">InvestingPro</h1>
-            <p className="text-gray-600 mt-2">Your Trusted Investment Platform</p>
-          </div>
-
-          <div className="flex mb-6">
-            <button onClick={() => setIsLogin(true)} className={`flex-1 py-2 ${isLogin ? 'bg-blue-900 text-white' : 'bg-gray-100 text-gray-600'} rounded-l-lg transition`}>
-              Login
-            </button>
-            <button onClick={() => setIsLogin(false)} className={`flex-1 py-2 ${!isLogin ? 'bg-blue-900 text-white' : 'bg-gray-100 text-gray-600'} rounded-r-lg transition`}>
-              Sign Up
-            </button>
-          </div>
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-              <input type="email" required value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-600 focus:border-transparent" />
-            </div>
-
-            {!isLogin && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Username</label>
-                <input type="text" required value={formData.username} onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-600 focus:border-transparent" />
-              </div>
-            )}
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
-              <input type="password" required value={formData.password} onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-600 focus:border-transparent" />
-            </div>
-
-            {!isLogin && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Referral Code (Optional)</label>
-                <input type="text" value={formData.referralCode} onChange={(e) => setFormData({ ...formData, referralCode: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-600 focus:border-transparent" />
-              </div>
-            )}
-
-            {error && <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm">{error}</div>}
-
-            <button type="submit" className="w-full bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 transition">
-              {isLogin ? 'Login' : 'Create Account'}
-            </button>
-          </form>
-
-          {isLogin && <p className="text-center text-sm text-gray-600 mt-4">Demo Admin: admin@investingpro.com / admin123</p>}
         </div>
-      </div>
-    );
-  };
+    </nav>
 
-  const UserDashboard = () => (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-      <div className="bg-white rounded-xl shadow-lg p-6">
-        <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mb-4">
-          <DollarSign className="w-6 h-6 text-blue-600" />
+    <!-- Landing Page -->
+    <div id="landingPage">
+        <div class="hero">
+            <h1>🚀 Smart Investment Platform</h1>
+            <p>Invest ₦3K-₦30K, Earn 3X Returns. Refer & Earn ₦1,500!</p>
+            <button class="hero-btn" onclick="showRegister()">Start Now</button>
         </div>
-        <h3 className="text-gray-600 text-sm mb-1">Total Invested</h3>
-        <p className="text-2xl font-bold text-blue-900">${(currentUser?.totalInvested || 0).toFixed(2)}</p>
-      </div>
-      <div className="bg-white rounded-xl shadow-lg p-6">
-        <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mb-4">
-          <TrendingUp className="w-6 h-6 text-green-600" />
-        </div>
-        <h3 className="text-gray-600 text-sm mb-1">Current Balance</h3>
-        <p className="text-2xl font-bold text-green-600">${(currentUser?.balance || 0).toFixed(2)}</p>
-      </div>
-      <div className="bg-white rounded-xl shadow-lg p-6">
-        <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mb-4">
-          <Users className="w-6 h-6 text-purple-600" />
-        </div>
-        <h3 className="text-gray-600 text-sm mb-1">Total Referrals</h3>
-        <p className="text-2xl font-bold text-blue-900">{currentUser?.referrals?.length || 0}</p>
-      </div>
-      <div className="bg-white rounded-xl shadow-lg p-6">
-        <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center mb-4">
-          <TrendingUp className="w-6 h-6 text-orange-600" />
-        </div>
-        <h3 className="text-gray-600 text-sm mb-1">Total Profit</h3>
-        <p className="text-2xl font-bold text-green-600">${(currentUser?.profit || 0).toFixed(2)}</p>
-      </div>
     </div>
-  );
 
-  const InvestmentPage = () => {
-    const [amount, setAmount] = useState('');
-    const [success, setSuccess] = useState(false);
-
-    const plans = [
-      { name: 'Starter', minAmount: 100, maxAmount: 999, returns: '5%', duration: '7 days' },
-      { name: 'Growth', minAmount: 1000, maxAmount: 4999, returns: '8%', duration: '14 days' },
-      { name: 'Premium', minAmount: 5000, maxAmount: 19999, returns: '12%', duration: '30 days' },
-      { name: 'Elite', minAmount: 20000, maxAmount: 999999, returns: '15%', duration: '60 days' }
-    ];
-
-    const handleInvest = async () => {
-      const investAmount = parseFloat(amount);
-      if (investAmount > 0) {
-        const result = await handleInvestment(investAmount);
-        if (result) {
-          setSuccess(true);
-          setAmount('');
-          setTimeout(() => setSuccess(false), 3000);
-        }
-      }
-    };
-
-    return (
-      <div className="space-y-6">
-        <h2 className="text-2xl font-bold text-blue-900">Investment Plans</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {plans.map((plan, idx) => (
-            <div key={idx} className="bg-white rounded-xl shadow-lg p-6 border-2 border-transparent hover:border-green-600 transition">
-              <h3 className="text-xl font-bold text-blue-900 mb-2">{plan.name}</h3>
-              <div className="space-y-2 text-sm text-gray-600">
-                <p>Min: ${plan.minAmount}</p>
-                <p>Max: ${plan.maxAmount}</p>
-                <p className="text-green-600 font-semibold">Returns: {plan.returns}</p>
-                <p>Duration: {plan.duration}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-        <div className="bg-white rounded-xl shadow-lg p-6">
-          <h3 className="text-xl font-bold text-blue-900 mb-4">Make Investment</h3>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Investment Amount ($)</label>
-              <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Enter amount"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-600 focus:border-transparent" />
-            </div>
-            {success && (
-              <div className="bg-green-50 text-green-600 p-3 rounded-lg flex items-center">
-                <CheckCircle className="w-5 h-5 mr-2" />Profile updated successfully!
-              </div>
-            )}
-            <button type="submit" className="w-full bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 transition">
-              Update Profile
-            </button>
-          </form>
-        </div>
-      </div>
-    );
-  };
-
-  const AdminDashboard = () => {
-    const totalUsers = users.filter(u => !u.isAdmin).length;
-    const totalInvestments = users.reduce((sum, u) => sum + (u.totalInvested || 0), 0);
-    const totalReferrals = users.reduce((sum, u) => sum + (u.referrals?.length || 0), 0);
-    const pendingWithdrawals = withdrawals.filter(w => w.status === 'pending').length;
-
-    return (
-      <div className="space-y-6">
-        <h2 className="text-2xl font-bold text-blue-900">Admin Dashboard</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <div className="bg-white rounded-xl shadow-lg p-6">
-            <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mb-4">
-              <Users className="w-6 h-6 text-blue-600" />
-            </div>
-            <h3 className="text-gray-600 text-sm mb-1">Total Users</h3>
-            <p className="text-2xl font-bold text-blue-900">{totalUsers}</p>
-          </div>
-          <div className="bg-white rounded-xl shadow-lg p-6">
-            <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mb-4">
-              <DollarSign className="w-6 h-6 text-green-600" />
-            </div>
-            <h3 className="text-gray-600 text-sm mb-1">Total Investments</h3>
-            <p className="text-2xl font-bold text-green-600">${totalInvestments.toFixed(2)}</p>
-          </div>
-          <div className="bg-white rounded-xl shadow-lg p-6">
-            <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mb-4">
-              <Link2 className="w-6 h-6 text-purple-600" />
-            </div>
-            <h3 className="text-gray-600 text-sm mb-1">Total Referrals</h3>
-            <p className="text-2xl font-bold text-blue-900">{totalReferrals}</p>
-          </div>
-          <div className="bg-white rounded-xl shadow-lg p-6">
-            <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center mb-4">
-              <Clock className="w-6 h-6 text-orange-600" />
-            </div>
-            <h3 className="text-gray-600 text-sm mb-1">Pending Withdrawals</h3>
-            <p className="text-2xl font-bold text-orange-600">{pendingWithdrawals}</p>
-          </div>
-        </div>
-        <div className="bg-white rounded-xl shadow-lg p-6">
-          <h3 className="text-xl font-bold text-blue-900 mb-4">All Users</h3>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b">
-                  <th className="text-left py-3 px-4">Username</th>
-                  <th className="text-left py-3 px-4">Email</th>
-                  <th className="text-left py-3 px-4">Balance</th>
-                  <th className="text-left py-3 px-4">Invested</th>
-                  <th className="text-left py-3 px-4">Referrals</th>
-                </tr>
-              </thead>
-              <tbody>
-                {users.filter(u => !u.isAdmin).map(user => (
-                  <tr key={user.id} className="border-b hover:bg-gray-50">
-                    <td className="py-3 px-4">{user.username}</td>
-                    <td className="py-3 px-4">{user.email}</td>
-                    <td className="py-3 px-4 text-green-600 font-semibold">${(user.balance || 0).toFixed(2)}</td>
-                    <td className="py-3 px-4">${(user.totalInvested || 0).toFixed(2)}</td>
-                    <td className="py-3 px-4">{user.referrals?.length || 0}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  const AdminWithdrawals = () => {
-    return (
-      <div className="space-y-6">
-        <h2 className="text-2xl font-bold text-blue-900">Withdrawal Requests</h2>
-        <div className="bg-white rounded-xl shadow-lg p-6">
-          {withdrawals.length > 0 ? (
-            <div className="space-y-4">
-              {withdrawals.map(w => (
-                <div key={w.id} className="p-4 border rounded-lg">
-                  <div className="flex items-center justify-between mb-3">
-                    <div>
-                      <p className="font-bold text-blue-900">{w.username}</p>
-                      <p className="text-sm text-gray-600">{new Date(w.requestDate).toLocaleString()}</p>
+    <!-- User Dashboard -->
+    <div id="userDashboard" class="dashboard">
+        <div class="container">
+            <div class="wallet-card">
+                <div class="wallet-label">Total Balance</div>
+                <div class="wallet-amount" id="walletBalance">₦0</div>
+                <div class="wallet-grid">
+                    <div class="wallet-item">
+                        <span class="wallet-item-value" id="walletDeposited">₦0</span>
+                        <span class="wallet-item-label">Deposited</span>
                     </div>
-                    <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                      w.status === 'approved' ? 'bg-green-100 text-green-700' :
-                      w.status === 'rejected' ? 'bg-red-100 text-red-700' :
-                      'bg-yellow-100 text-yellow-700'
-                    }`}>{w.status.toUpperCase()}</span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4 text-sm mb-3">
-                    <div>
-                      <p className="text-gray-600">Amount</p>
-                      <p className="font-semibold text-green-600">${w.amount.toFixed(2)}</p>
+                    <div class="wallet-item">
+                        <span class="wallet-item-value" id="walletWithdrawn">₦0</span>
+                        <span class="wallet-item-label">Withdrawn</span>
                     </div>
-                    <div>
-                      <p className="text-gray-600">Bank</p>
-                      <p className="font-semibold">{w.bankName}</p>
+                    <div class="wallet-item">
+                        <span class="wallet-item-value" id="walletReferrals">0</span>
+                        <span class="wallet-item-label">Referrals</span>
                     </div>
-                    <div className="col-span-2">
-                      <p className="text-gray-600">Account Number</p>
-                      <p className="font-semibold">{w.accountNumber}</p>
+                    <div class="wallet-item">
+                        <span class="wallet-item-value" id="walletRefEarnings">₦0</span>
+                        <span class="wallet-item-label">Ref Earnings</span>
                     </div>
-                  </div>
-                  {w.status === 'pending' && (
-                    <div className="flex gap-2">
-                      <button onClick={() => handleWithdrawalUpdate(w.id, 'approved')}
-                        className="flex-1 bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 transition flex items-center justify-center">
-                        <CheckCircle className="w-4 h-4 mr-2" />Approve
-                      </button>
-                      <button onClick={() => handleWithdrawalUpdate(w.id, 'rejected')}
-                        className="flex-1 bg-red-600 text-white py-2 rounded-lg hover:bg-red-700 transition flex items-center justify-center">
-                        <XCircle className="w-4 h-4 mr-2" />Reject
-                      </button>
-                    </div>
-                  )}
                 </div>
-              ))}
             </div>
-          ) : (
-            <p className="text-gray-600 text-center py-8">No withdrawal requests.</p>
-          )}
-        </div>
-      </div>
-    );
-  };
 
-  const Navigation = () => {
-    const menuItems = isAdmin ? [
-      { id: 'admin-dashboard', label: 'Dashboard', icon: Home },
-      { id: 'admin-withdrawals', label: 'Withdrawals', icon: CreditCard }
-    ] : [
-      { id: 'dashboard', label: 'Dashboard', icon: Home },
-      { id: 'invest', label: 'Invest', icon: Briefcase },
-      { id: 'referrals', label: 'Referrals', icon: Link2 },
-      { id: 'withdraw', label: 'Withdraw', icon: CreditCard },
-      { id: 'history', label: 'History', icon: History },
-      { id: 'profile', label: 'Profile', icon: User }
-    ];
-
-    return (
-      <nav className="bg-blue-900 text-white">
-        <div className="max-w-7xl mx-auto px-4">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center space-x-2">
-              <TrendingUp className="w-8 h-8 text-green-500" />
-              <span className="text-xl font-bold">InvestingPro</span>
+            <div class="tabs">
+                <button class="tab active" onclick="showUserTab('plans')">💎 Plans</button>
+                <button class="tab" onclick="showUserTab('investments')">📊 My Investments</button>
+                <button class="tab" onclick="showUserTab('referrals')">🤝 Referrals</button>
+                <button class="tab" onclick="showUserTab('withdraw')">💳 Withdraw</button>
+                <button class="tab" onclick="showUserTab('settings')">⚙️ Settings</button>
             </div>
-            <button onClick={() => { setCurrentUser(null); setIsAdmin(false); setCurrentPage('login'); }}
-              className="flex items-center space-x-2 px-4 py-2 bg-red-600 rounded-lg hover:bg-red-700 transition">
-              <LogOut className="w-4 h-4" />
-              <span>Logout</span>
-            </button>
-          </div>
-        </div>
-        <div className="bg-blue-800 overflow-x-auto">
-          <div className="max-w-7xl mx-auto px-4">
-            <div className="flex space-x-1">
-              {menuItems.map(item => (
-                <button key={item.id} onClick={() => setCurrentPage(item.id)}
-                  className={`flex items-center space-x-2 px-4 py-3 transition whitespace-nowrap ${
-                    currentPage === item.id ? 'bg-green-600 text-white' : 'text-gray-300 hover:bg-blue-700'
-                  }`}>
-                  <item.icon className="w-4 h-4" />
-                  <span className="text-sm font-medium">{item.label}</span>
-                </button>
-              ))}
+
+            <div id="tab-plans" class="tab-content active">
+                <div class="card">
+                    <div class="card-title">Investment Plans</div>
+                    <div class="plans-grid" id="userPlansGrid"></div>
+                </div>
             </div>
-          </div>
+
+            <div id="tab-investments" class="tab-content">
+                <div class="card">
+                    <div class="card-title">My Investments</div>
+                    <div id="userInvestmentsList"></div>
+                </div>
+            </div>
+
+            <div id="tab-referrals" class="tab-content">
+                <div class="card">
+                    <div class="card-title">Your Referral Link</div>
+                    <div class="referral-box">
+                        <div class="referral-link" id="userReferralLink"></div>
+                        <button class="btn-copy" onclick="copyLink()">📋 Copy Link</button>
+                    </div>
+                    <div id="userReferralsList"></div>
+                </div>
+            </div>
+
+            <div id="tab-withdraw" class="tab-content">
+                <div class="card">
+                    <div class="card-title">Request Withdrawal</div>
+                    <div id="withdrawAlert"></div>
+                    <form onsubmit="submitWithdrawal(event)">
+                        <div class="form-group">
+                            <label class="form-label">Amount</label>
+                            <input type="number" class="form-input" id="withdrawAmount" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Bank Name</label>
+                            <input type="text" class="form-input" id="withdrawBank" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Account Number</label>
+                            <input type="text" class="form-input" id="withdrawAccount" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Account Name</label>
+                            <input type="text" class="form-input" id="withdrawName" required>
+                        </div>
+                        <button type="submit" class="btn-primary">Submit Request</button>
+                    </form>
+                </div>
+            </div>
+
+            <div id="tab-settings" class="tab-content">
+                <div class="card">
+                    <div class="settings-section">
+                        <div class="settings-title">Choose Theme Color</div>
+                        <div class="color-grid">
+                            <div class="color-option active" style="background: linear-gradient(135deg, #6366f1, #8b5cf6)" onclick="changeColor('#6366f1', '#8b5cf6', '#ec4899')">
+                                ✓
+                            </div>
+                            <div class="color-option" style="background: linear-gradient(135deg, #3b82f6, #2563eb)" onclick="changeColor('#3b82f6', '#2563eb', '#f59e0b')">
+                            </div>
+                            <div class="color-option" style="background: linear-gradient(135deg, #10b981, #059669)" onclick="changeColor('#10b981', '#059669', '#f59e0b')">
+                            </div>
+                            <div class="color-option" style="background: linear-gradient(135deg, #f59e0b, #d97706)" onclick="changeColor('#f59e0b', '#d97706', '#ec4899')">
+                            </div>
+                            <div class="color-option" style="background: linear-gradient(135deg, #ef4444, #dc2626)" onclick="changeColor('#ef4444', '#dc2626', '#f59e0b')">
+                            </div>
+                            <div class="color-option" style="background: linear-gradient(135deg, #ec4899, #d946ef)" onclick="changeColor('#ec4899', '#d946ef', '#f59e0b')">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
-      </nav>
-    );
-  };
-
-  if (currentPage === 'login') {
-    return <LoginPage />;
-  }
-
-  return (
-    <div className="min-h-screen bg-gray-100">
-      <Navigation />
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        {currentPage === 'dashboard' && <UserDashboard />}
-        {currentPage === 'invest' && <InvestmentPage />}
-        {currentPage === 'referrals' && <ReferralPage />}
-        {currentPage === 'withdraw' && <WithdrawalPage />}
-        {currentPage === 'history' && <TransactionHistory />}
-        {currentPage === 'profile' && <ProfilePage />}
-        {currentPage === 'admin-dashboard' && <AdminDashboard />}
-        {currentPage === 'admin-withdrawals' && <AdminWithdrawals />}
-      </div>
     </div>
-  );
-};
 
-export default InvestingPro;2" />Investment successful!
-              </div>
-            )}
-            <button onClick={handleInvest} className="w-full bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 transition">
-              Invest Now
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  const ReferralPage = () => {
-    const [copied, setCopied] = useState(false);
-    const referralLink = `https://investingpro.com/signup?ref=${currentUser?.referralCode}`;
-
-    const copyLink = () => {
-      navigator.clipboard.writeText(referralLink);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    };
-
-    return (
-      <div className="space-y-6">
-        <h2 className="text-2xl font-bold text-blue-900">Referral Program</h2>
-        <div className="bg-gradient-to-r from-green-600 to-green-500 rounded-xl shadow-lg p-6 text-white">
-          <h3 className="text-xl font-bold mb-2">Earn 10% Commission</h3>
-          <p className="mb-4">Share your referral link and earn 10% of every investment made by your referrals!</p>
-          <div className="bg-white rounded-lg p-4 flex items-center justify-between">
-            <span className="text-gray-800 text-sm truncate mr-4">{referralLink}</span>
-            <button onClick={copyLink} className="bg-blue-900 text-white px-4 py-2 rounded-lg hover:bg-blue-800 transition flex-shrink-0">
-              {copied ? 'Copied!' : 'Copy'}
-            </button>
-          </div>
-        </div>
-        <div className="bg-white rounded-xl shadow-lg p-6">
-          <h3 className="text-xl font-bold text-blue-900 mb-4">Your Referrals ({currentUser?.referrals?.length || 0})</h3>
-          {currentUser?.referrals && currentUser.referrals.length > 0 ? (
-            <div className="space-y-3">
-              {currentUser.referrals.map((ref, idx) => (
-                <div key={idx} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                  <div>
-                    <p className="font-semibold text-blue-900">{ref.username}</p>
-                    <p className="text-sm text-gray-600">{new Date(ref.date).toLocaleDateString()}</p>
-                  </div>
-                  <CheckCircle className="w-5 h-5 text-green-600" />
+    <!-- Admin Dashboard -->
+    <div id="adminDashboard" class="dashboard hidden">
+        <div class="container">
+            <div class="card">
+                <div class="card-title">⚙️ Admin Control Panel</div>
+                <div class="wallet-grid">
+                    <div class="wallet-item" style="background: var(--light);">
+                        <span class="wallet-item-value" style="color: var(--primary);" id="adminTotalUsers">0</span>
+                        <span class="wallet-item-label">Total Users</span>
+                    </div>
+                    <div class="wallet-item" style="background: var(--light);">
+                        <span class="wallet-item-value" style="color: var(--success);" id="adminTotalInvested">₦0</span>
+                        <span class="wallet-item-label">Total Invested</span>
+                    </div>
+                    <div class="wallet-item" style="background: var(--light);">
+                        <span class="wallet-item-value" style="color: var(--accent);" id="adminTotalDeposits">₦0</span>
+                        <span class="wallet-item-label">Total Deposits</span>
+                    </div>
+                    <div class="wallet-item" style="background: var(--light);">
+                        <span class="wallet-item-value" style="color: var(--danger);" id="adminPending">0</span>
+                        <span class="wallet-item-label">Pending</span>
+                    </div>
                 </div>
-              ))}
             </div>
-          ) : (
-            <p className="text-gray-600 text-center py-8">No referrals yet. Start sharing your link!</p>
-          )}
-        </div>
-      </div>
-    );
-  };
 
-  const WithdrawalPage = () => {
-    const [formData, setFormData] = useState({ amount: '', accountNumber: '', bankName: '' });
-    const [success, setSuccess] = useState(false);
-    const [error, setError] = useState('');
-
-    const handleSubmit = async (e) => {
-      e.preventDefault();
-      setError('');
-      const amount = parseFloat(formData.amount);
-
-      if (amount > currentUser.balance) {
-        setError('Insufficient balance');
-        return;
-      }
-
-      const result = await handleWithdrawalRequest(amount, formData.accountNumber, formData.bankName);
-      if (result) {
-        setSuccess(true);
-        setFormData({ amount: '', accountNumber: '', bankName: '' });
-        setTimeout(() => setSuccess(false), 3000);
-      }
-    };
-
-    const userWithdrawals = withdrawals.filter(w => w.userId === currentUser?.id);
-
-    return (
-      <div className="space-y-6">
-        <h2 className="text-2xl font-bold text-blue-900">Withdraw Funds</h2>
-        <div className="bg-white rounded-xl shadow-lg p-6">
-          <div className="mb-4 p-4 bg-blue-50 rounded-lg">
-            <p className="text-sm text-gray-700">Available Balance: <span className="font-bold text-green-600">${(currentUser?.balance || 0).toFixed(2)}</span></p>
-          </div>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Withdrawal Amount ($)</label>
-              <input type="number" required value={formData.amount} onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-600 focus:border-transparent" />
+            <div class="tabs">
+                <button class="tab active" onclick="showAdminTab('users')">👥 All Users</button>
+                <button class="tab" onclick="showAdminTab('investments')">📊 Investments</button>
+                <button class="tab" onclick="showAdminTab('withdrawals')">💸 Withdrawals</button>
+                <button class="tab" onclick="showAdminTab('account')">🏦 Account</button>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Account Number</label>
-              <input type="text" required value={formData.accountNumber} onChange={(e) => setFormData({ ...formData, accountNumber: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-600 focus:border-transparent" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Bank Name</label>
-              <input type="text" required value={formData.bankName} onChange={(e) => setFormData({ ...formData, bankName: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-600 focus:border-transparent" />
-            </div>
-            {success && (
-              <div className="bg-green-50 text-green-600 p-3 rounded-lg flex items-center">
-                <CheckCircle className="w-5 h-5 mr-2" />Withdrawal request submitted successfully!
-              </div>
-            )}
-            {error && <div className="bg-red-50 text-red-600 p-3 rounded-lg">{error}</div>}
-            <button type="submit" className="w-full bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 transition">
-              Request Withdrawal
-            </button>
-          </form>
-        </div>
-        <div className="bg-white rounded-xl shadow-lg p-6">
-          <h3 className="text-xl font-bold text-blue-900 mb-4">Withdrawal History</h3>
-          {userWithdrawals.length > 0 ? (
-            <div className="space-y-3">
-              {userWithdrawals.map((w) => (
-                <div key={w.id} className="p-4 bg-gray-50 rounded-lg">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="font-semibold text-blue-900">${w.amount.toFixed(2)}</span>
-                    <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                      w.status === 'approved' ? 'bg-green-100 text-green-700' :
-                      w.status === 'rejected' ? 'bg-red-100 text-red-700' :
-                      'bg-yellow-100 text-yellow-700'
-                    }`}>{w.status.toUpperCase()}</span>
-                  </div>
-                  <p className="text-sm text-gray-600">{w.bankName} - {w.accountNumber}</p>
-                  <p className="text-xs text-gray-500 mt-1">{new Date(w.requestDate).toLocaleString()}</p>
+
+            <div id="admin-tab-users" class="tab-content active">
+                <div class="card">
+                    <div class="card-title">All Users (New & Old)</div>
+                    <div id="adminUsersList"></div>
                 </div>
-              ))}
             </div>
-          ) : (
-            <p className="text-gray-600 text-center py-8">No withdrawal requests yet.</p>
-          )}
-        </div>
-      </div>
-    );
-  };
 
-  const TransactionHistory = () => {
-    const userTransactions = transactions.filter(t => t.userId === currentUser?.id);
-
-    return (
-      <div className="space-y-6">
-        <h2 className="text-2xl font-bold text-blue-900">Transaction History</h2>
-        <div className="bg-white rounded-xl shadow-lg p-6">
-          {userTransactions.length > 0 ? (
-            <div className="space-y-3">
-              {userTransactions.map((t) => (
-                <div key={t.id} className="p-4 bg-gray-50 rounded-lg flex items-center justify-between">
-                  <div>
-                    <p className="font-semibold text-blue-900 capitalize">{t.type}</p>
-                    <p className="text-sm text-gray-600">{new Date(t.date).toLocaleString()}</p>
-                    <span className={`text-xs px-2 py-1 rounded-full ${
-                      t.status === 'completed' || t.status === 'approved' ? 'bg-green-100 text-green-700' :
-                      t.status === 'rejected' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'
-                    }`}>{t.status}</span>
-                  </div>
-                  <p className={`text-xl font-bold ${t.type === 'investment' ? 'text-green-600' : 'text-orange-600'}`}>
-                    {t.type === 'investment' ? '+' : '-'}${t.amount.toFixed(2)}
-                  </p>
+            <div id="admin-tab-investments" class="tab-content">
+                <div class="card">
+                    <div class="card-title">Pending Approvals</div>
+                    <div id="adminPendingList"></div>
                 </div>
-              ))}
+                <div class="card">
+                    <div class="card-title">Active Investments</div>
+                    <div id="adminActiveList"></div>
+                </div>
             </div>
-          ) : (
-            <p className="text-gray-600 text-center py-8">No transactions yet.</p>
-          )}
+
+            <div id="admin-tab-withdrawals" class="tab-content">
+                <div class="card">
+                    <div class="card-title">Pending Withdrawals</div>
+                    <div id="adminWithdrawalsList"></div>
+                </div>
+            </div>
+
+            <div id="admin-tab-account" class="tab-content">
+                <div class="card">
+                    <div class="card-title">Company Account Details</div>
+                    <form onsubmit="updateCompanyAccount(event)">
+                        <div class="form-group">
+                            <label class="form-label">Account Number</label>
+                            <input type="text" class="form-input" id="adminAccNumber" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Bank Name</label>
+                            <input type="text" class="form-input" id="adminBank" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Account Name</label>
+                            <input type="text" class="form-input" id="adminAccName" required>
+                        </div>
+                        <button type="submit" class="btn-primary">Update Account</button>
+                    </form>
+                </div>
+            </div>
         </div>
-      </div>
-    );
-  };
+    </div>
 
-  const ProfilePage = () => {
-    const [formData, setFormData] = useState({
-      username: currentUser?.username || '',
-      email: currentUser?.email || '',
-      newPassword: ''
-    });
-    const [success, setSuccess] = useState(false);
+    <!-- Login Modal -->
+    <div id="loginModal" class="modal">
+        <div class="modal-content">
+            <button class="modal-close" onclick="closeModal('loginModal')">×</button>
+            <h2>Welcome Back!</h2>
+            <p class="modal-subtitle">Login to your account</p>
+            <div id="loginAlert"></div>
+            <form onsubmit="handleLogin(event)">
+                <div class="form-group">
+                    <label class="form-label">Email</label>
+                    <input type="email" class="form-input" id="loginEmail" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Password</label>
+                    <input type="password" class="form-input" id="loginPassword" required>
+                </div>
+                <button type="submit" class="btn-primary">Login</button>
+            </form>
+            <div class="toggle-link">
+                Don't have an account? <a onclick="switchToRegister()">Register</a>
+            </div>
+        </div>
+    </div>
 
-    const handleUpdate = async (e) => {
-      e.preventDefault();
-      const updatedUsers = users.map(u => {
-        if (u.id === currentUser.id) {
-          const updated = { ...u, username: formData.username, email: formData.email };
-          if (formData.newPassword) updated.password = formData.newPassword;
-          setCurrentUser(updated);
-          return updated;
-        }
-        return u;
-      });
-      await saveUsers(updatedUsers);
-      setSuccess(true);
-      setTimeout(() => setSuccess(false), 3000);
-    };
-
-    return (
-      <div className="space-y-6">
-        <h2 className="text-2xl font-bold text-blue-900">Profile Settings</h2>
-        <div className="bg-white rounded-xl shadow-lg p-6">
-          <form onSubmit={handleUpdate} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Username</label>
-              <input type="text" value={formData.username} onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-600 focus:border-transparent" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
-              <input type="email" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-600 focus:border-transparent" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">New Password (leave blank to keep current)</label>
-              <input type="password" value={formData.newPassword} onChange={(e) => setFormData({ ...formData, newPassword: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-600 focus:border-transparent" />
-            </div>
-            {success && (
-              <div className="bg-green-50 text-green-600 p-3 rounded-lg flex items-center">
-                <CheckCircle className="w-5 h-5 mr-
+    <!-- Register Modal -->
+    <div id="registerModal" class="modal">
+        <div class="modal-content">
+            <button class="modal-close" onclick="closeModal('registerModal')">×</button>
+            <h2>Create Account</h2>
+            <p class="modal-subtitle">Join and start earning today</p>
+            <div id="registerAlert"></div>
+            <form onsubmit="handleRegister(event)">
+                <div class="form-group">
+                    <label class="form-label">Full Name</label>
+                    <input type="text" class="form-input" id="registerName" required>
