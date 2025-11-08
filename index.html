@@ -867,17 +867,20 @@
         }
 
         function updateAdminDashboard() {
-            const totalInvested = investments.filter(i => i.status === 'Approved').reduce((sum, i) => sum + i.amount, 0);
+            const totalInvestedAmount = investments.filter(i => i.status === 'Approved').reduce((sum, i) => sum + i.amount, 0);
             const pendingWith = withdrawals.filter(w => w.status === 'Pending').length;
 
             document.getElementById('totalUsers').textContent = users.length;
             document.getElementById('totalInvestments').textContent = investments.length;
-            document.getElementById('totalInvested').textContent = '₦' + totalInvested.toLocaleString();
+            document.getElementById('totalInvested').textContent = '₦' + totalInvestedAmount.toLocaleString();
             document.getElementById('pendingWithdrawals').textContent = pendingWith;
 
             // Users List
             document.getElementById('usersList').innerHTML = users.length ? users.map(u => {
                 const userInv = investments.filter(i => i.userId === u.id);
+                const approved = userInv.filter(i => i.status === 'Approved');
+                const totalInv = approved.reduce((sum, i) => sum + i.amount, 0);
+
                 return `
                     <div class="item">
                         <strong>${u.name}</strong><br>
@@ -885,6 +888,7 @@
                         Phone: ${u.phone}<br>
                         Referral Code: ${u.referralCode}<br>
                         Total Investments: ${userInv.length}<br>
+                        Total Invested: ₦${totalInv.toLocaleString()}<br>
                         Referrals: ${u.referralCount || 0}<br>
                         Joined: ${new Date(u.created).toLocaleDateString()}<br>
                         <button class="btn btn-danger" onclick="deleteUser(${u.id})">Delete User</button>
@@ -899,10 +903,10 @@
                     Email: ${i.userEmail}<br>
                     Amount: ₦${i.amount.toLocaleString()}<br>
                     Returns: ₦${i.returns.toLocaleString()}<br>
-                    Referral Code: ${i.referralCode || 'None'}<br>
+                    Referral Code Used: ${i.referralCode || 'None'}<br>
                     Payment Proof: ${i.paymentProof}<br>
-                    Status: ${i.status}<br>
                     Date: ${new Date(i.created).toLocaleDateString()}<br>
+                    Status: <span style="color: ${i.status === 'Approved' ? 'green' : i.status === 'Rejected' ? 'red' : 'orange'}">${i.status}</span><br>
                     ${i.status === 'Pending' ? `
                         <button class="btn btn-success" onclick="approveInvestment(${i.id})">Approve</button>
                         <button class="btn btn-danger" onclick="rejectInvestment(${i.id})">Reject</button>
@@ -917,10 +921,10 @@
                     Email: ${w.userEmail}<br>
                     Amount: ₦${w.amount.toLocaleString()}<br>
                     Bank: ${w.bankName}<br>
-                    Account: ${w.accountNumber}<br>
+                    Account Number: ${w.accountNumber}<br>
                     Account Name: ${w.accountName}<br>
-                    Status: ${w.status}<br>
                     Date: ${new Date(w.created).toLocaleDateString()}<br>
+                    Status: <span style="color: ${w.status === 'Paid' ? 'green' : w.status === 'Rejected' ? 'red' : 'orange'}">${w.status}</span><br>
                     ${w.status === 'Pending' ? `
                         <button class="btn btn-success" onclick="approveWithdrawal(${w.id})">Mark as Paid</button>
                         <button class="btn btn-danger" onclick="rejectWithdrawal(${w.id})">Reject</button>
@@ -928,15 +932,16 @@
                 </div>
             `).join('') : '<p>No withdrawal requests yet</p>';
 
-            // Activities List
-            document.getElementById('activitiesList').innerHTML = activities.slice(-20).reverse().map(a => `
+            // Recent Activities
+            const recentActivities = [...activities].reverse().slice(0, 20);
+            document.getElementById('activitiesList').innerHTML = recentActivities.length ? recentActivities.map(a => `
                 <div class="item">
                     <strong>${a.type}</strong><br>
                     User: ${a.user}<br>
                     ${a.amount ? `Amount: ₦${a.amount.toLocaleString()}<br>` : ''}
                     Time: ${new Date(a.time).toLocaleString()}
                 </div>
-            `).join('');
+            `).join('') : '<p>No activities yet</p>';
         }
 
         async function approveInvestment(id) {
@@ -949,15 +954,12 @@
             if (inv.referralCode) {
                 const referrer = users.find(u => u.referralCode === inv.referralCode);
                 if (referrer) {
-                    referrer.referralCount = (referrer.referralCount || 0) + 1;
-                    referrer.earnings = (referrer.earnings || 0) + 1200;
+                    const referrerHasInvestment = investments.some(i => i.userId === referrer.id && i.status === 'Approved');
+                    if (referrerHasInvestment) {
+                        referrer.referralCount = (referrer.referralCount || 0) + 1;
+                        referrer.earnings = (referrer.earnings || 0) + 1200;
+                    }
                 }
-            }
-
-            // Update user's total invested
-            const user = users.find(u => u.id === inv.userId);
-            if (user) {
-                user.totalInvested = (user.totalInvested || 0) + inv.amount;
             }
 
             activities.push({
@@ -977,7 +979,6 @@
             if (!inv) return;
 
             inv.status = 'Rejected';
-
             activities.push({
                 type: 'Investment Rejected',
                 user: inv.userName,
@@ -991,15 +992,14 @@
         }
 
         async function approveWithdrawal(id) {
-            const withdrawal = withdrawals.find(w => w.id === id);
-            if (!withdrawal) return;
+            const w = withdrawals.find(w => w.id === id);
+            if (!w) return;
 
-            withdrawal.status = 'Paid';
-
+            w.status = 'Paid';
             activities.push({
                 type: 'Withdrawal Paid',
-                user: withdrawal.userName,
-                amount: withdrawal.amount,
+                user: w.userName,
+                amount: w.amount,
                 time: new Date().toISOString()
             });
 
@@ -1009,15 +1009,14 @@
         }
 
         async function rejectWithdrawal(id) {
-            const withdrawal = withdrawals.find(w => w.id === id);
-            if (!withdrawal) return;
+            const w = withdrawals.find(w => w.id === id);
+            if (!w) return;
 
-            withdrawal.status = 'Rejected';
-
+            w.status = 'Rejected';
             activities.push({
                 type: 'Withdrawal Rejected',
-                user: withdrawal.userName,
-                amount: withdrawal.amount,
+                user: w.userName,
+                amount: w.amount,
                 time: new Date().toISOString()
             });
 
@@ -1026,12 +1025,19 @@
             updateAdminDashboard();
         }
 
-        async function deleteUser(userId) {
+        async function deleteUser(id) {
             if (!confirm('Are you sure you want to delete this user?')) return;
 
-            users = users.filter(u => u.id !== userId);
-            investments = investments.filter(i => i.userId !== userId);
-            withdrawals = withdrawals.filter(w => w.userId !== userId);
+            const user = users.find(u => u.id === id);
+            users = users.filter(u => u.id !== id);
+            investments = investments.filter(i => i.userId !== id);
+            withdrawals = withdrawals.filter(w => w.userId !== id);
+
+            activities.push({
+                type: 'User Deleted',
+                user: user.name,
+                time: new Date().toISOString()
+            });
 
             await saveData();
             showNotification('User deleted!');
